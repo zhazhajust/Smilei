@@ -4,7 +4,7 @@ from .._Utils import *
 class Probe(Diagnostic):
 	"""Class for loading a Probe diagnostic"""
 
-	def _init(self, requestedProbe=None, field=None, timesteps=None, subset=None, average=None, data_log=False, chunksize=10000000, data_transform=None, **kwargs):
+	def _init(self, probeNumber=None, field=None, timesteps=None, subset=None, average=None, data_log=False, chunksize=10000000, data_transform=None, **kwargs):
 
 		self._h5probe = []
 		self._alltimesteps = []
@@ -14,9 +14,8 @@ class Probe(Diagnostic):
 		# Search available diags
 		diag_numbers, diag_names = self.simulation.getDiags("Probes")
 		
-		# If no requestedProbe, print available probes
-		self.requestedProbe = requestedProbe
-		if requestedProbe is None:
+		# If no probeNumber, print available probes
+		if probeNumber is None:
 			if len(diag_numbers)>0:
 				error = ["Argument `probeNumber` not provided"]
 				error += ["Printing available probes:"]
@@ -27,7 +26,7 @@ class Probe(Diagnostic):
 				error += ["No probes found"]
 			raise Exception("\n".join(error))
 		
-		info = self.simulation.probeInfo(requestedProbe)
+		info = self.simulation.probeInfo(probeNumber)
 		self.probeNumber = info["probeNumber"]
 		self.probeName   = info["probeName"]
 		self._fields = info["fields"]
@@ -44,7 +43,7 @@ class Probe(Diagnostic):
 		# If no field, print available fields
 		if field is None:
 			error = ["Argument `field` not provided"]
-			error += ["Printing available fields for probe #"+str(requestedProbe)+":"]
+			error += ["Printing available fields for probe #"+str(probeNumber)+":"]
 			error += ["----------------------------------------"]
 			error += [str(", ".join(self._fields))]
 			raise Exception("\n".join(error))
@@ -61,16 +60,19 @@ class Probe(Diagnostic):
 		
 		# 1 - verifications, initialization
 		# -------------------------------------------------------------------
-		# Get the shape of the probe
-		self._myinfo = self._getMyInfo()
-		self._initialShape = self._myinfo["shape"]
-		if self._initialShape.prod()==1:
-			self._initialShape = self._np.array([], dtype=int)
-		self.numpoints = self._h5probe[0]["positions"].shape[0]
-		
-		# Parse `field`
-		self._loadField(field)
-		
+		# Parse the `field` argument
+		sortedfields = reversed(sorted(self._fields, key = len))
+		self.operation = field
+		for f in sortedfields:
+			i = self._fields.index(f)
+			self.operation = self.operation.replace(f,"#"+str(i))
+		requested_fields = self._re.findall("#\d+",self.operation)
+		if len(requested_fields) == 0:
+			raise Exception("Could not find any existing field in `"+field+"`")
+		self._fieldn = [ int(f[1:]) for f in requested_fields ] # indexes of the requested fields
+		self._fieldn = list(set(self._fieldn))
+		self._fieldname = [ self._fields[i] for i in self._fieldn ] # names of the requested fields
+
 		# Check subset
 		if subset is None:
 			subset = {}
@@ -87,6 +89,13 @@ class Probe(Diagnostic):
 		self._data_log = data_log
 		self._data_transform = data_transform
 
+		# Get the shape of the probe
+		self._myinfo = self._getMyInfo()
+		self._initialShape = self._myinfo["shape"]
+		if self._initialShape.prod()==1:
+			self._initialShape = self._np.array([], dtype=int)
+		self.numpoints = self._h5probe[0]["positions"].shape[0]
+		
 		# 2 - Manage timesteps
 		# -------------------------------------------------------------------
 		# If timesteps is None, then keep all timesteps otherwise, select timesteps
@@ -246,6 +255,32 @@ class Probe(Diagnostic):
 					indexInArray = indexInArray*self._finalShape[d] + ijk[d]
 				# Store ordering
 				self._ordering[indexInArray] = indexInFile
+		
+		# Build units
+		titles = {}
+		fieldunits = {}
+		unitsForField = {"B":"B_r","E":"E_r","J":"J_r","R":"Q_r*N_r","P":"V_r*K_r*N_r"}
+		self.time_integral = self._myinfo["time_integral"]
+		
+		for f in self._fieldname:
+			i = self._fields.index(f)
+			if self.time_integral:
+				fieldunits.update({ i:unitsForField[f[0]] + "*T_r" })
+				titles    .update({ i:"Time-integrated "+f })
+			else:
+				fieldunits.update({ i:unitsForField[f[0]] })
+				titles    .update({ i:f })
+		# Make total units and title
+		self._title  = self.operation
+		self._vunits = self.operation
+		for n in self._fieldn:
+			self._title  = self._title .replace("#"+str(n), titles    [n])
+			self._vunits = self._vunits.replace("#"+str(n), fieldunits[n])
+		self._vunits = self.units._getUnits(self._vunits)
+
+		# Set the directory in case of exporting
+		self._exportPrefix = "Probe"+str(probeNumber)+"_"+"".join(self._fieldname)
+		self._exportDir = self._setExportDir(self._exportPrefix)
 
 		# Finish constructor
 		self.valid = True
@@ -306,33 +341,6 @@ class Probe(Diagnostic):
 	def _getMyInfo(self):
 		return self._getInfo(self.probeNumber)
 	
-	# Parse the `field` argument
-	def _loadField(self, field):
-		self.operation = field
-		self.time_integral = self._myinfo["time_integral"]
-		
-		which_units = {"B":"B_r","E":"E_r","J":"J_r","R":"Q_r*N_r","P":"V_r*K_r*N_r"}
-		def fieldTranslator(f):
-			i = self._fields.index(f)
-			if self.time_integral:
-				return which_units[f[0]] + "*T_r", "C[%d]"%i, "Time-integrated "+f
-			else:
-				return which_units[f[0]], "C[%d]"%i, f
-		self._operation = Operation(self.operation, fieldTranslator, self._ureg)
-		self._fieldname = self._operation.variables
-		self._fieldn = [self._fields.index(f) for f in self._fieldname]
-		self._vunits = self._operation.translated_units
-		self._title  = self._operation.title
-		
-		# Set the directory in case of exporting
-		self._exportPrefix = "Probe"+str(self.requestedProbe)+"_"+"".join(self._fieldname)
-		self._exportDir = self._setExportDir(self._exportPrefix)
-	
-	# Change the `field` argument
-	def changeField(self, field):
-		self._loadField(field)
-		self._prepareUnits()
-	
 	# get all available fields
 	def getFields(self):
 		return self._fields
@@ -364,6 +372,7 @@ class Probe(Diagnostic):
 		# Get arrays from requested field
 		# get data
 		C = {}
+		op = self.operation
 		for n in reversed(self._fieldn): # for each field in operation
 			buffer = self._np.zeros((self._ordering.size,), dtype="double")
 			for first, last, npart in ChunkedRange(self.numpoints, self._chunksize):
@@ -372,8 +381,9 @@ class Probe(Diagnostic):
 				data = self._dataForTime[t][n,first:last]
 				buffer[keep] = data[o[keep]]
 			C.update({ n:buffer })
+			op = op.replace("#"+str(n), "C["+str(n)+"]")
 		# Calculate the operation
-		A = self._operation.eval(locals())
+		A = eval(op)
 		# Reshape array because it is flattened in the file
 		A = self._np.reshape(A, self._finalShape)
 		# Apply the averaging
@@ -381,6 +391,8 @@ class Probe(Diagnostic):
 			if self._averages[iaxis]:
 				A = self._np.mean(A, axis=iaxis, keepdims=True)
 		A = self._np.squeeze(A) # remove averaged axes
+
+		if callable(self._data_transform): A = self._data_transform(A)
 		return A
 
 	# We override _prepare4
@@ -395,7 +407,20 @@ class Probe(Diagnostic):
 
 	# Overloading a plotting function in order to use pcolormesh instead of imshow
 	def _plotOnAxes_2D_(self, ax, A):
-		self._plot = ax.pcolormesh(self._xfactor*self._edges[0], self._yfactor*self._edges[1], A, **self.options.image)
+		vmin = self.options.vmin
+		vmax = self.options.vmax
+		if self.options.vsym:
+			if vmin or vmax:
+				print("WARNING: vsym set on the same Diagnostic as vmin and/or vmax. Ignoring vmin/vmax.")
+		        
+			if self.options.vsym is True:
+				vmax = self._np.abs(A).max()
+			else:
+				vmax = self._np.abs(self.options.vsym)
+
+			vmin = -vmax
+		self._plot = ax.pcolormesh(self._xfactor*self._edges[0], self._yfactor*self._edges[1], (A),
+			vmin = vmin, vmax = vmax, **self.options.image)
 		return self._plot
 	def _animateOnAxes_2D_(self, ax, A):
 		self._plot.set_array( A.flatten() )

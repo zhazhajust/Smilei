@@ -26,7 +26,11 @@ MF_Solver2D_GrassiSpL::MF_Solver2D_GrassiSpL( Params &params )
     Dx    = delta*dt/dx;
     Dy    = delta*dt/dy;
     
-    isEFilterApplied = params.Friedman_filter;
+    isEFilterApplied = false;
+    if( params.Friedman_filter ) {
+        isEFilterApplied = true;
+    }
+    
 }
 
 MF_Solver2D_GrassiSpL::~MF_Solver2D_GrassiSpL()
@@ -35,18 +39,14 @@ MF_Solver2D_GrassiSpL::~MF_Solver2D_GrassiSpL()
 
 void MF_Solver2D_GrassiSpL::operator()( ElectroMagn *fields )
 {
-    const unsigned int nx_p = fields->dimPrim[0];
-    const unsigned int nx_d = fields->dimDual[0];
-    const unsigned int ny_p = fields->dimPrim[1];
-    const unsigned int ny_d = fields->dimDual[1];
     // Static-cast of the fields
     Field2D *Ex2D;
     Field2D *Ey2D;
     Field2D *Ez2D;
     if( isEFilterApplied ) {
-        Ex2D = static_cast<Field2D *>( fields->filter_->Ex_[0] );
-        Ey2D = static_cast<Field2D *>( fields->filter_->Ey_[0] );
-        Ez2D = static_cast<Field2D *>( fields->filter_->Ez_[0] );
+        Ex2D = static_cast<Field2D *>( fields->Exfilter[0] );
+        Ey2D = static_cast<Field2D *>( fields->Eyfilter[0] );
+        Ez2D = static_cast<Field2D *>( fields->Ezfilter[0] );
     } else {
         Ex2D = static_cast<Field2D *>( fields->Ex_ );
         Ey2D = static_cast<Field2D *>( fields->Ey_ );

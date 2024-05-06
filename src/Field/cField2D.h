@@ -73,20 +73,12 @@ public:
         return data_2D[i][j];
     };
     
-    Field* clone() override {
-        auto newInstance = new cField2D(dims_);
-        newInstance->name = name;
-        newInstance->copyFrom(this);
-        return newInstance;
-    }
-
-
+    
     virtual double norm2( unsigned int istart[3][2], unsigned int bufsize[3][2] ) override;
-    virtual double norm2_cylindrical( unsigned int istart[3][2], unsigned int bufsize[3][2], int j_ref );
     
     inline std::complex<double> &operator()( unsigned int i )
     {
-        DEBUGEXEC( if( i>=number_of_points_ ) ERROR( name << " Out of limits "<< i << " < " <<dims_[0] ) );
+        DEBUGEXEC( if( i>=globalDims_ ) ERROR( name << " Out of limits "<< i << " < " <<dims_[0] ) );
         DEBUGEXEC( if( !std::isfinite( real( cdata_[i] )+imag( cdata_[i] ) ) ) ERROR( name << " Not finite "<< i << " = " << cdata_[i] ) );
         return cdata_[i];
     };
@@ -95,14 +87,22 @@ public:
     void put_to( double val ) override
     {
         if( cdata_ )
-            for( unsigned int i=0; i<number_of_points_; i++ ) {
+            for( unsigned int i=0; i<globalDims_; i++ ) {
                 cdata_[i] = val;
             }
     }
+    void copyFrom( Field *from_field )
+    {
+        cField2D *from_cfield = static_cast<cField2D *>( from_field );
+        DEBUGEXEC( if( globalDims_!=from_field->globalDims_ ) ERROR( "Field size do not match "<< name << " " << from_field->name ) );
+        for( unsigned int i=0; i< globalDims_; i++ ) {
+            ( *this )( i )=( *from_cfield )( i );
+        }
+    }
     
-    void put( Field *outField, Params &params, Patch *thisPatch, Patch *outPatch ) override;
-    void add( Field *outField, Params &params, Patch *thisPatch, Patch *outPatch ) override;
-    void get( Field  *inField, Params &params, Patch   *inPatch, Patch *thisPatch ) override;
+    void put( Field *outField, Params &params, SmileiMPI *smpi, Patch *thisPatch, Patch *outPatch ) override;
+    void add( Field *outField, Params &params, SmileiMPI *smpi, Patch *thisPatch, Patch *outPatch ) override;
+    void get( Field  *inField, Params &params, SmileiMPI *smpi, Patch   *inPatch, Patch *thisPatch ) override;
     
     //! this will present the data as a 2d matrix
     std::complex<double> **data_2D;

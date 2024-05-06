@@ -64,11 +64,7 @@ author = u''
 # The short X.Y version.
 
 from subprocess import check_output
-try:
-	version = check_output('git describe --tags --abbrev=0', shell=True).decode().strip('v\n')
-except :
-	version = " unknown" 
-    
+version = check_output('git describe --tags --abbrev=0', shell=True).decode().strip('v\n')
 
 # The full version, including alpha/beta/rc tags.
 release = version
@@ -78,7 +74,7 @@ release = version
 #
 # This is also used if you do content translation via gettext catalogs.
 # Usually you set "language" from the command line for these cases.
-language = 'en'
+language = None
 
 # There are two options for replacing |today|: either, you set today to some
 # non-false value, then it is used:

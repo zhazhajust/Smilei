@@ -6,7 +6,6 @@ __all__ = [
 	"openNamelist",
 	"Options",
 	"Units",
-	"Operation",
 	"Movie",
 	"SaveAs",
 	"multiPlot",
@@ -68,7 +67,7 @@ def updateMatplotLibColormaps():
 class ChunkedRange:
 	def __init__(self, size, chunksize):
 		self.size = int(size)
-		self.nchunks = int( max(1,size-1) // int(chunksize) + 1 )
+		self.nchunks = int( (size-1) // int(chunksize) + 1 )
 		self.adjustedchunksize = int( (size-1) // self.nchunks + 1 )
 		self.ichunk = 0
 	def __iter__(self):
@@ -164,8 +163,6 @@ class Options(object):
 		self.vmin        = kwargs.pop("vmin"       , self.vmin )
 		self.vmax        = kwargs.pop("vmax"       , self.vmax )
 		self.vsym        = kwargs.pop("vsym"       , self.vsym )
-		if self.vsym and (self.vmin is not None or self.vmax is not None):
-			print("WARNING: vsym set on the same Diagnostic as vmin and/or vmax. Ignoring vmin/vmax.")
 		self.explicit_cmap = kwargs.pop("cmap"     , self.explicit_cmap )
 		self.side        = kwargs.pop("side"       , self.side )
 		self.transparent = kwargs.pop("transparent", self.transparent )
@@ -181,8 +178,6 @@ class Options(object):
 			elif kwa in ["aspect","axis_bgcolor","frame_on","position","visible",
 					     "xscale","xticks","yscale","yticks","zorder"]:
 				self.axes[kwa] = val
-			elif kwa in ["axis_facecolor"]:
-				self.axes[kwa[5:]] = val
 			# labels
 			elif kwa in ["title","xlabel","ylabel"]:
 				self.labels[kwa] = val
@@ -234,6 +229,7 @@ class Options(object):
 			self.image['cmap'] = self.explicit_cmap
 		return kwargs
 
+PintWarningIssued = False
 
 class Units(object):
 	""" Units()
@@ -262,13 +258,22 @@ class Units(object):
 				elif kwa == "y": self.requestedY = val
 				elif kwa == "v": self.requestedV = val
 				else: raise TypeError("Units() got an unexpected keyword argument '"+kwa+"'")
-		self.ureg = None
-	
-	def _initRegistry(self, ureg):
-		self.ureg = ureg
+
+		# We try to import the pint package
+		self.UnitRegistry = None
+		try:
+			from pint import UnitRegistry
+			self.UnitRegistry = UnitRegistry
+		except Exception as e:
+			global PintWarningIssued
+			if self.verbose and not PintWarningIssued:
+				print("WARNING: you do not have the *pint* package, so you cannot modify units.")
+				print("       : The results will stay in code units.")
+				PintWarningIssued = True
+			return
 	
 	def _getUnits(self, units):
-		if self.ureg:
+		if self.UnitRegistry:
 			u = self.ureg(units)
 			try: u = u.units.format_babel(locale="en")
 			except Exception as e: u = ""
@@ -305,9 +310,41 @@ class Units(object):
 		elif requestedUnits:
 			print("WARNING: units `%s` requested on non-existent or dimensionless axis" % requestedUnits)
 		return 1., ""
+
+	def prepare(self, reference_angular_frequency_SI=None):
+		if self.UnitRegistry:
+			if reference_angular_frequency_SI:
+				# Load pint's default unit registry
+				self.ureg = self.UnitRegistry()
+				# Define code units
+				self.ureg.define("V_r = speed_of_light"                   ) # velocity
+				self.ureg.define("W_r = "+str(reference_angular_frequency_SI)+"*hertz") # frequency
+				self.ureg.define("M_r = electron_mass"                    ) # mass
+				self.ureg.define("Q_r = 1.602176565e-19 * coulomb"        ) # charge
+			else:
+				# Make blank unit registry
+				self.ureg = self.UnitRegistry(None)
+				self.ureg.define("V_r = [code_velocity]"                  ) # velocity
+				self.ureg.define("W_r = [code_frequency]"                 ) # frequency
+				self.ureg.define("M_r = [code_mass]"                      ) # mass
+				self.ureg.define("Q_r = [code_charge]"                    ) # charge
+				self.ureg.define("epsilon_0 = 1")
+				# Add radians and degrees
+				self.ureg.define("radian    = [] = rad"               )
+				self.ureg.define("degree    = pi/180*radian = deg"    )
+				self.ureg.define("steradian = radian ** 2 = sr"       )
+			self.ureg.define("L_r = V_r / W_r"                        ) # length
+			self.ureg.define("T_r = 1   / W_r"                        ) # time
+			self.ureg.define("P_r = M_r * V_r"                        ) # momentum
+			self.ureg.define("K_r = M_r * V_r**2"                     ) # energy
+			self.ureg.define("N_r = epsilon_0 * M_r * W_r**2 / Q_r**2") # density
+			self.ureg.define("J_r = V_r * Q_r * N_r"                  ) # current
+			self.ureg.define("B_r = M_r * W_r / Q_r"                  ) # magnetic field
+			self.ureg.define("E_r = B_r * V_r"                        ) # electric field
+			self.ureg.define("S_r = K_r * V_r * N_r"                  ) # poynting
 	
 	def convertAxes(self, xunits="", yunits="", vunits="", tunits=""):
-		if self.ureg:
+		if self.UnitRegistry:
 			self.xcoeff, self.xname = self._convert(xunits, self.requestedX)
 			self.ycoeff, self.yname = self._convert(yunits, self.requestedY)
 			self.vcoeff, self.vname = self._convert(vunits, self.requestedV)
@@ -319,127 +356,7 @@ class Units(object):
 			self.tcoeff, self.tname = 1., "code units"
 
 
-class Operation(object):
-	""" Operation(operation, QuantityTranslator, ureg)
-	
-	Convert the user's requested operation in a units-aware, data-aware expression
-	
-	Parameters:
-	-----------
-	operation: the user's requested operation
-	pattern: the regexp pattern to find the variables in the operation
-	QuantityTranslator: function that takes a string as argument (a quantity name)
-		and outputs its units + its replacement string + its displayed name
-	ureg: Pint's unit registry or None for no unit awareness
-	
-	Methods:
-	--------
-	eval(locals): evaluates the operation including variables in the `locals` namespace
-	"""
-	
-	def __init__(self, operation, QuantityTranslator, ureg):
-		import re
-		import numpy as np
-		self.ureg = ureg
-		self.constants = []
-		self.variables = []
-		self.imports = {}
-		
-		full_op = re.split(r"(#[0-9]+|\b[a-zA-Z]\w*\b)(?![\['])", operation)
-		title = full_op.copy()
-		
-		# Special case: only 1 variable and nothing else
-		if len(full_op) == 3 and full_op[0] == full_op[-1] == "":
-			try:
-				units, replacement, name = QuantityTranslator(full_op[1])
-				self.variables += [full_op[1]]
-			except Exception:
-				raise Exception("Quantity "+full_op[1]+" unknown")
-			# Same units
-			self.translated_units = units
-			# Make the operation string
-			self.translated_operation = "(%s)" % replacement
-			# Make the title
-			self.title = name
-			# Define the eval function
-			self.eval = self.evalWithoutPint
-		
-		# With Pint
-		elif ureg:
-			basic_op = full_op.copy()
-			# Loop names encountered, and translate either as a known variable or as a known constant
-			for i,q in enumerate(full_op[1::2]):
-				try: # variable
-					if q in self.variables: # if previously found
-						j = self.variables.index(q)
-						full_op[2*i+1] = full_op[2*j+1]
-						basic_op[2*i+1] = basic_op[2*j+1]
-						title[2*j+1] = name
-					else:
-						units, replacement, name = QuantityTranslator(q)
-						self.constants += [ureg(units)]
-						self.variables += [q]
-						full_op[2*i+1] = "(%s*self.constants[%d])" % (replacement, len(self.constants)-1)
-						basic_op[2*i+1] = "(self.constants[%d])" % (len(self.constants)-1)
-						title[2*i+1] = name
-				except Exception: # constant
-					try:
-						self.constants += [ureg(q)]
-						full_op[2*i+1] = "(self.constants[%d])" % (len(self.constants)-1)
-						basic_op[2*i+1] = full_op[2*i+1]
-					except Exception: # numpy function
-						try:
-							self.imports[q] = getattr(np,q)
-						except Exception:
-							raise Exception("Quantity "+q+" not understood")
-			# Calculate the total units and its inverse
-			locals().update(self.imports)
-			units = eval("".join(basic_op)).units
-			self.translated_units = units.format_babel(locale="en")
-			# Make the operation string
-			self.translated_operation = "".join(full_op)
-			# Divide the operation by final units
-			self.constants += [1/units]
-			self.translated_operation = "(%s) * self.constants[-1]"%self.translated_operation
-			# Make the title
-			self.title = "".join(title)
-			# Define the eval function
-			self.eval = self.evalWithPint
-			
-		# Without Pint
-		else:
-			# Loop names encountered, and translate as a known variable
-			for i,q in enumerate(full_op[1::2]):
-				if q in self.variables: # if previously found
-					j = self.variables.index(q)
-					full_op[2*i+1] = full_op[2*j+1]
-					title[2*i+1] = title[2*j+1]
-				else:
-					try: # variable
-						units, replacement, name = QuantityTranslator(q)
-						self.variables += [q]
-						full_op[2*i+1] = "(%s)" % replacement
-						title[2*i+1] = name
-					except Exception: # numpy function
-						try:
-							self.imports[q] = getattr(np,q)
-						except Exception: # constant
-							raise Exception("Quantity "+q+" unknown")
-			self.translated_units = "1"
-			# Make the operation string
-			self.translated_operation = "".join(full_op)
-			# Make the title
-			self.title = "".join(title)
-			# Define the eval function
-			self.eval = self.evalWithoutPint
-	
-	def evalWithPint(self, l):
-		l.update(self.imports)
-		return eval(self.translated_operation, l, locals()).magnitude
-	
-	def evalWithoutPint(self, l):
-		l.update(self.imports)
-		return eval(self.translated_operation, l, locals())
+
 
 
 class Movie:
@@ -487,12 +404,11 @@ class Movie:
 
 class SaveAs:
 
-	def __init__(self, smartPath, fig, dpi=200):
+	def __init__(self, smartPath, fig, plt):
 		import os.path as p
 		from os import sep as sep
 		default_extension = ".png"
 		self.figure = fig
-		self.dpi = dpi
 
 		self.prefix = False
 		if type(smartPath) is str:
@@ -530,7 +446,7 @@ class SaveAs:
 	def frame(self, id=None):
 		if self.prefix:
 			file = self.prefix + ("" if id is None else "%010d"%int(id)) + self.suffix
-			self.figure.savefig(file, dpi=self.dpi)
+			self.figure.savefig(file)
 
 
 class _multiPlotUtil(object):
@@ -556,7 +472,6 @@ class _multiPlotUtil(object):
 		# Gather all times
 		self.alltimes = []
 		for Diag in Diags:
-			Diag.set( **kwargs )
 			diagtimes = Diag.getTimesteps()
 			if self.timesteps is not None:
 				diagtimes = Diag._selectTimesteps(self.timesteps, diagtimes)
@@ -586,7 +501,7 @@ class _multiPlotUtil(object):
 		# Make the figure
 		if "facecolor" not in kwargs: kwargs.update({ "facecolor":"w" })
 		self.options = Options()
-		kwargs = self.options.set(**kwargs)
+		self.options.set(**kwargs)
 		self.fig = self.plt.figure(**self.options.figure0)
 		self.fig.set(**self.options.figure1) # Apply figure kwargs
 		self.fig.clf()
@@ -634,42 +549,31 @@ class _multiPlotUtil(object):
 			if len(l) > 0:
 				if Diag.options.xmin is None: self.xmin = min(self.xmin,l[0][0])
 				if Diag.options.xmax is None: self.xmax = max(self.xmax,l[0][1])
-				# if len(l) > 1:
-				# 	if Diag.options.ymin is None: self.ymin = min(self.ymin,l[1][0])
-				# 	if Diag.options.ymax is None: self.ymax = max(self.ymax,l[1][1])
+				if len(l) > 1:
+					if Diag.options.ymin is None: self.ymin = min(self.ymin,l[1][0])
+					if Diag.options.ymax is None: self.ymax = max(self.ymax,l[1][1])
 		# Find min max
 		if self.option_xmin: self.xmin = min([self.xmin]+self.option_xmin)
 		if self.option_xmax: self.xmax = max([self.xmax]+self.option_xmax)
-		# if self.option_ymin: self.ymin = min([self.ymin]+self.option_ymin)
-		# if self.option_ymax: self.ymax = max([self.ymax]+self.option_ymax)
+		if self.option_ymin: self.ymin = min([self.ymin]+self.option_ymin)
+		if self.option_ymax: self.ymax = max([self.ymax]+self.option_ymax)
 		# Find number of legends
 		self.nlegends = 0
 		for Diag in Diags:
 			if "label" in Diag.options.plot:
 				self.nlegends += 1
-		# Check kwargs
-		if kwargs:
-			print("WARNING: unknown arguments `"+"`,`".join(kwargs)+"`")
-	
-	def legend(self):
-		if self.nlegends > 0:
-			if self.sameAxes:
-				self.ax[0].legend(
-					[Diag._plot for Diag in self.Diags if Diag._plot],
-					[Diag.options.plot["label"] for Diag in self.Diags if Diag._plot],
-				)
 	
 	def staticPlot(self):
 		for Diag in self.Diags:
 			Diag._plotOnAxes(Diag._ax, Diag.getTimesteps()[-1])
-		self.legend()
+		if self.nlegends > 0:
+			self.plt.legend()
 		self.plt.draw()
 		self.plt.pause(0.00001)
 	
 	def twinOptions(self, Diag):
 		if self.sameAxes:
-			if Diag.dim>0:
-				Diag._ax.set_xlim(self.xmin,self.xmax)
+			Diag._ax.set_xlim(self.xmin,self.xmax)
 			if Diag.dim<2 and self.bothsides:
 				color = Diag._plot.get_color()
 				Diag._ax.yaxis.label.set_color(color)
@@ -687,7 +591,7 @@ class _multiPlotUtil(object):
 	def animate(self):
 		# Loop all times
 		mov = Movie(self.fig, self.movie, self.fps, self.dpi)
-		save = SaveAs(self.saveAs, self.fig, self.dpi)
+		save = SaveAs(self.saveAs, self.fig, self.plt)
 		for i,time in enumerate(self.alltimes):
 			t = None
 			for Diag in self.Diags:
@@ -706,9 +610,9 @@ class _multiPlotUtil(object):
 		mov.finish()
 	
 	def update(self, time):
+		t = self.np.round(time/self.Diags[0].timestep)
 		for Diag in self.Diags:
-			it = self.np.round(time/Diag.timestep)
-			i = self.np.argmin(self.np.abs(self.np.array(Diag._timesteps)-it))
+			i = self.np.argmin(self.np.abs(self.np.array(Diag._timesteps)-t))
 			Diag._animateOnAxes(Diag._ax, Diag._timesteps[i], cax_id = Diag._cax_id)
 			self.twinOptions(Diag)
 		self.plt.draw()
@@ -777,7 +681,12 @@ def multiSlide(*Diags, **kwargs):
 class VTKfile:
 
 	def __init__(self):
-		import vtk
+		try:
+			import vtk
+		except Exception as e:
+			print("Python module 'vtk' not found. Could not export to VTK format")
+			return
+		
 		self.vtk = vtk
 	
 	def Array(self, data, name):

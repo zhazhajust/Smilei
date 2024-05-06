@@ -23,7 +23,7 @@ public :
     
     virtual void run( SmileiMPI *smpi, VectorPatch &vecPatches, int itime, SimWindow *simWindow, Timers &timers ) override;
     
-    virtual H5Write writeField( H5Write*, std::string ) = 0;
+    virtual H5Write writeField( H5Write*, std::string, int ) = 0;
     
     virtual bool needsRhoJs( int itime ) override;
     
@@ -35,10 +35,6 @@ public :
                                   unsigned int &istart_in_zone,
                                   unsigned int &istart_in_file,
                                   unsigned int &nsteps );
-    void findSubgridIntersection1( hsize_t idim,
-                                   hsize_t &zone_begin,
-                                   hsize_t &zone_npoints,
-                                   hsize_t &start_in_zone );
                                   
     //! Get memory footprint of current diagnostic
     int getMemFootPrint() override
@@ -71,7 +67,7 @@ protected :
     //! Number of cells to skip in each direction
     std::vector<unsigned int> patch_offset_in_grid;
     //! Number of cells in each direction
-    std::vector<unsigned int> patch_size_;
+    std::vector<unsigned int> patch_size;
     //! Buffer for the output of a field
     std::vector<double> data;
     
@@ -87,20 +83,24 @@ protected :
     //! Copy patch field to current "data" buffer
     virtual void getField( Patch *patch, unsigned int ) = 0;
     
+    //! Temporary dataset that is used for folding the 2D hilbert curve
+    H5Write * tmp_dset_;
+    
     //! Variable to store the status of a dataset (whether it exists or not)
     bool status;
     
-    //! Total size of the data in file (for estimating disk usage)
-    unsigned int total_dataset_size;
+    //! Tools for re-reading and re-writing the file in a folded pattern
+    hsize_t file_size, chunk_size_firstwrite;
+    std::vector<hsize_t> chunk_size;
+    unsigned int one_patch_buffer_size, total_dataset_size;
+    H5Space *filespace_reread, *filespace_firstwrite, *memspace_reread, *memspace_firstwrite;
+    std::vector<double> data_reread, data_rewrite;
     
     //! True if this diagnostic requires the pre-calculation of the particle J & Rho
     bool hasRhoJs;
     
     //! Save the field type (needed for OpenPMD units dimensionality)
     std::vector<unsigned int> field_type;
-    
-    //! Datatype for writing to HDF5 file
-    hid_t file_datatype_;
 };
 
 #endif

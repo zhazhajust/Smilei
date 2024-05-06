@@ -12,6 +12,7 @@
 #undef _XOPEN_SOURCE
 
 #include "Timer.h"
+#include "codeConstants.h"
 
 #include <vector>
 #include <string>
@@ -131,19 +132,12 @@ public:
     std::vector< std::vector<bool> > open_boundaries;
     bool save_magnectic_fields_for_SM;
     std::vector< std::vector<int> > number_of_pml_cells;
-    std::vector< std::vector<double> > envelope_pml_sigma_parameters;
-    std::vector< std::vector<double> > envelope_pml_kappa_parameters;
-    std::vector< std::vector<double> > envelope_pml_alpha_parameters;
-
 
     //! Boundary conditions for Envelope Field
     std::vector< std::vector<std::string> > Env_BCs;
 
     //! Define if the ponderomotive force is computed (default = false)
     //bool ponderomotive_force;
-    
-    // Use BTIS3 interpolation method to reduce the effects of numerical Cherenkov radiation
-    bool use_BTIS3;
 
     //! Define if laser envelope model is used (default = false)
     bool Laser_Envelope_model=false;
@@ -190,8 +184,6 @@ public:
     //! Fridman filtering parameter [real between 0 and 1]
     double Friedman_theta;
 
-    // mark if OpenMP tasks are used or not
-    bool omptasks;
     //! Clusters width
     //unsigned int cluster_width_;
     int cluster_width_;
@@ -219,19 +211,19 @@ public:
     //! max value for dt (due to usual FDTD CFL condition: should be moved to ElectroMagn solver (MG))
     double dtCFL;
 
-    //! number of cells in every direction of the patch
-    std::vector<unsigned int> patch_size_;
+    //! number of cells in every direction of the local domain
+    std::vector<unsigned int> n_space;
     
-    //! number of cells in every direction of the region (can be different from 1 MPI process to another)
-    std::vector<unsigned int> region_size_;
+    //! number of cells in every direction of the local domain (can be different from 1 MPI process to another)
+    std::vector<unsigned int> n_space_region;
     
     std::vector<unsigned int> number_of_region;
     std::vector< std::vector<int> > offset_map;
     std::vector< std::vector< std::vector<int> > > map_rank;
-    std::vector<int> region_coordinates;
+    std::vector<int> coordinates;
     
     //! number of cells in every direction of the global domain
-    std::vector<unsigned int> global_size_;
+    std::vector<unsigned int> n_space_global;
 
     //! spatial step (cell dimension in every direction)
     std::vector<double> cell_length;
@@ -298,17 +290,17 @@ public:
     bool hasWindow;
 
     //! Tells whether there is a species with Monte-Carlo Compton radiation
-    bool has_MC_radiation_;
+    bool hasMCRadiation;
     //! Tells whether there is a species with Continuous radiation loss.
-    bool has_LL_radiation_;
+    bool hasLLRadiation;
     //! Tells whether there is a species with the stochastic radiation loss
     //! of Niel et al.
-    bool has_Niel_radiation_;
+    bool hasNielRadiation;
     //! Tells whether there is w/out radiation reaction but for which a RadiationSpectrum diag is called
-    bool has_diag_radiation_spectrum_;
+    bool hasDiagRadiationSpectrum;
 
     //! Tells whether there is a species with multiphoton Breit-Wheeler
-    bool has_multiphoton_Breit_Wheeler_;
+    bool hasMultiphotonBreitWheeler;
     
     //! Tells whether position_old is used
     bool keep_position_old;
@@ -367,7 +359,7 @@ public:
     const double electron_mass = 9.109382616e-31;
 
     //! Speed of light in vacuum (m/s)
-    const double c_vacuum_ = 299792458;
+    const double c_vacuum = 299792458;
 
     //! passing named command to python
     void runScript( std::string command, std::string name, PyObject * );
@@ -375,11 +367,7 @@ public:
     //! Characters width for timestep output
     unsigned int timestep_width;
 
-    //! flag that tells if cell_sorting is activated
-    bool cell_sorting_;
-    
-    //! For gpu branch compatibility, not used for the moment
-    bool gpu_computing;
+    bool cell_sorting;
 };
 
 #endif

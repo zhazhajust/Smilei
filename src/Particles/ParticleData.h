@@ -56,9 +56,7 @@ public:
         setVectorAttr( test_value, "weight" );
         setVectorAttr( test_charge, "charge" );
         setVectorAttr( test_id, "id" );
-        for( auto name :  {"Ex", "Ey", "Ez", "Bx", "By", "Bz", "Wx", "Wy", "Wz"} ) {
-            setVectorAttr( test_value, name );
-        }
+        setVectorAttr( test_chi, "chi" );
         // Verify the return value of the function
         PyObject *ret( nullptr );
         ret = PyObject_CallFunctionObjArgs( function, particles, NULL );
@@ -141,16 +139,8 @@ public:
         setVectorAttr( p->Weight, "weight" );
         setVectorAttr( p->Charge, "charge" );
         setVectorAttr( p->Id, "id" );
-        if( p->has_quantum_parameter ) {
+        if( p->isQuantumParameter ) {
             setVectorAttr( p->Chi, "chi" );
-        }
-        if( p->interpolated_fields_ ) {
-            std::vector<std::string> list = {"Ex", "Ey", "Ez", "Bx", "By", "Bz", "Wx", "Wy", "Wz"};
-            for( size_t i = 0; i < p->interpolated_fields_->mode_.size(); i++ ) {
-                if( p->interpolated_fields_->mode_[i] > 0 ) {
-                    setVectorAttr( p->interpolated_fields_->F_[i], list[i] );
-                }
-            }
         }
     };
 
@@ -165,13 +155,13 @@ private:
     npy_intp dims[1];
     unsigned int start; // particles are read starting at that index
 
-    void checkType( PyObject *obj, std::string &errorPrefix, bool * )
+    void checkType( PyObject *obj, std::string &errorPrefix, bool *dummy )
     {
         if( !PyArray_ISBOOL( ( PyArrayObject * )obj ) ) {
             ERROR( errorPrefix << " must return an array of booleans" );
         }
     };
-    void checkType( PyObject *obj, std::string &errorPrefix, double * )
+    void checkType( PyObject *obj, std::string &errorPrefix, double *dummy )
     {
         if( !PyArray_ISFLOAT( ( PyArrayObject * )obj ) ) {
             ERROR( errorPrefix << " must return an array of floats" );

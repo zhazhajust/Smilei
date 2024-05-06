@@ -16,8 +16,8 @@
 
 using namespace std;
 
-LaserEnvelopeAM::LaserEnvelopeAM( Params &params, Patch *patch )
-    : LaserEnvelope( params, patch )
+LaserEnvelopeAM::LaserEnvelopeAM( Params &params, Patch *patch, ElectroMagn *EMfields )
+    : LaserEnvelope( params, patch, EMfields )
 {
 
     one_ov_dl_sq    = 1./cell_length[0]/cell_length[0];
@@ -30,14 +30,14 @@ LaserEnvelopeAM::LaserEnvelopeAM( Params &params, Patch *patch )
     // Dimension of the primal and dual grids
     for( size_t i=0 ; i<params.nDim_field ; i++ ) {
         // Standard scheme
-        dimPrim[i] = params.patch_size_[i]+1;
+        dimPrim[i] = params.n_space[i]+1;
         // + Ghost domain
         dimPrim[i] += 2*params.oversize[i];
     }
     
     
-    A_  = new cField2D( dimPrim, "A_mode_1" );   //It's actually a mode 0 but the name is just a trick to fool Happi.
-    A0_ = new cField2D( dimPrim, "Aold_mode_1" );
+    A_  = new cField2D( dimPrim, "A_mode_0" );
+    A0_ = new cField2D( dimPrim, "Aold_mode_0" );
     
     Phi_         = new Field2D( dimPrim, "Phi_mode_0" );
     Phi_m        = new Field2D( dimPrim, "Phi_m_mode_0" );
@@ -54,11 +54,11 @@ LaserEnvelopeAM::LaserEnvelopeAM( Params &params, Patch *patch )
 }
 
 
-LaserEnvelopeAM::LaserEnvelopeAM( LaserEnvelope *envelope, Patch *patch, Params &params, unsigned int n_moved )
-    : LaserEnvelope( envelope, patch, params, n_moved )
+LaserEnvelopeAM::LaserEnvelopeAM( LaserEnvelope *envelope, Patch *patch, ElectroMagn *EMfields, Params &params, unsigned int n_moved )
+    : LaserEnvelope( envelope, patch, EMfields, params, n_moved )
 {
-    A_           = new cField2D( envelope->A_->dims_, "A_mode_1" );//It's actually a mode 0 but the name is just a trick to fool Happi.
-    A0_          = new cField2D( envelope->A0_->dims_, "Aold_mode_1" );
+    A_           = new cField2D( envelope->A_->dims_, "A_mode_0" );
+    A0_          = new cField2D( envelope->A0_->dims_, "Aold_mode_0" );
     
     Phi_         = new Field2D( envelope->Phi_->dims_ );
     Phi_m        = new Field2D( envelope->Phi_m->dims_ );
@@ -179,7 +179,7 @@ LaserEnvelopeAM::~LaserEnvelopeAM()
 {
 }
 
-void LaserEnvelopeAM::updateEnvelope( Patch *patch )
+void LaserEnvelopeAM::updateEnvelope( ElectroMagn *EMfields )
 {
     //// solves envelope equation in lab frame (see doc):
     // full_laplacian(A)+2ik0*(dA/dl+(1/c)*dA/dt)-d^2A/dt^2*(1/c^2)=Chi*A
@@ -195,23 +195,15 @@ void LaserEnvelopeAM::updateEnvelope( Patch *patch )
    
     cField2D *A2Dcyl       = static_cast<cField2D *>( A_ );               // the envelope at timestep n
     cField2D *A02Dcyl      = static_cast<cField2D *>( A0_ );              // the envelope at timestep n-1
-    Field2D *Env_Chi2Dcyl  = static_cast<Field2D *>( patch->EMfields->Env_Chi_ ); // source term of envelope equation
+    Field2D *Env_Chi2Dcyl  = static_cast<Field2D *>( EMfields->Env_Chi_ ); // source term of envelope equation
   
-    int  j_glob = ( static_cast<ElectroMagnAM *>( patch->EMfields ) )->j_glob_;
-    bool isYmin = patch->isBoundary( 1, 0 );
-    bool isYmax = patch->isBoundary( 1, 1 );
+    int  j_glob = ( static_cast<ElectroMagnAM *>( EMfields ) )->j_glob_;
+    bool isYmin = ( static_cast<ElectroMagnAM *>( EMfields ) )->isYmin;
+  
 
     // temporary variable for updated envelope
     cField2D *A2Dcylnew;
     A2Dcylnew  = new cField2D( A_->dims_ );
-
-    if (isYmax){
-        for( unsigned int i=1 ; i <A_->dims_[0]-1; i++ ) {
-            for ( unsigned int j=A_->dims_[1]-4 ; j < A_->dims_[1]-1 ; j++ ) {
-                ( *Env_Chi2Dcyl )( i, j ) = 1.*( *Env_Chi2Dcyl )( i, A_->dims_[1]-5 );
-            }
-        }
-    }
  
     //// explicit solver
     for( unsigned int i=1 ; i <A_->dims_[0]-1; i++ ) { // l loop
@@ -265,7 +257,7 @@ void LaserEnvelopeAM::updateEnvelope( Patch *patch )
     delete A2Dcylnew;
 } // end LaserEnvelopeAM::updateEnvelope
 
-void LaserEnvelopeAM::updateEnvelopeReducedDispersion( Patch *patch )
+void LaserEnvelopeAM::updateEnvelopeReducedDispersion( ElectroMagn *EMfields )
 {
     //// solves envelope equation in lab frame (see doc):
     // full_laplacian(A)+2ik0*(dA/dz+(1/c)*dA/dt)-d^2A/dt^2*(1/c^2)=Chi*A
@@ -288,24 +280,16 @@ void LaserEnvelopeAM::updateEnvelopeReducedDispersion( Patch *patch )
    
     cField2D *A2Dcyl       = static_cast<cField2D *>( A_ );                  // the envelope at timestep n
     cField2D *A02Dcyl      = static_cast<cField2D *>( A0_ );                 // the envelope at timestep n-1
-    Field2D *Env_Chi2Dcyl  = static_cast<Field2D *>( patch->EMfields->Env_Chi_ );   // source term of envelope equation
+    Field2D *Env_Chi2Dcyl  = static_cast<Field2D *>( EMfields->Env_Chi_ );   // source term of envelope equation
   
-    int  j_glob = ( static_cast<ElectroMagnAM *>( patch->EMfields ) )->j_glob_;
-    bool isYmin = patch->isBoundary( 1, 0 );//( static_cast<ElectroMagn2D *>( EMfields ) )->isYmin;
-    bool isYmax = patch->isBoundary( 1, 1 );//( static_cast<ElectroMagn2D *>( EMfields ) )->isYmax;
+    int  j_glob = ( static_cast<ElectroMagnAM *>( EMfields ) )->j_glob_;
+    bool isYmin = ( static_cast<ElectroMagnAM *>( EMfields ) )->isYmin;
+
 
     // temporary variable for updated envelope
     cField2D *A2Dcylnew;
     A2Dcylnew  = new cField2D( A_->dims_ );
-
-    if (isYmax){
-        for( unsigned int i=2 ; i <A_->dims_[0]-2; i++ ) {
-            for ( unsigned int j=A_->dims_[1]-4 ; j < A_->dims_[1]-1 ; j++ ) {
-                ( *Env_Chi2Dcyl )( i, j ) = 1.*( *Env_Chi2Dcyl )( i, A_->dims_[1]-5 );
-            }
-        }
-    }
-
+ 
     //// explicit solver
     for( unsigned int i=2 ; i <A_->dims_[0]-2; i++ ) { // l loop
         for( unsigned int j=std::max(3*isYmin,1) ; j < A_->dims_[1]-1 ; j++ ) { // r loop

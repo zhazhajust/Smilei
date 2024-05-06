@@ -12,11 +12,12 @@
 #include "ProjectorAM2Order.h"
 #include "ProjectorAM1Order.h"
 
+#ifdef _VECTO
 #include "Projector2D2OrderV.h"
 #include "Projector2D4OrderV.h"
 #include "Projector3D2OrderV.h"
 #include "Projector3D4OrderV.h"
-#include "ProjectorAM2OrderV.h"
+#endif
 
 #include "Params.h"
 #include "Patch.h"
@@ -44,16 +45,20 @@ public:
             if( !vectorization ) {
                 Proj = new Projector2D2Order( params, patch );
             }
+#ifdef _VECTO
             else {
                 Proj = new Projector2D2OrderV( params, patch );
             }
+#endif
         } else if( ( params.geometry == "2Dcartesian" ) && ( params.interpolation_order == ( unsigned int )4 ) ) {
             if( !vectorization ) {
                 Proj = new Projector2D4Order( params, patch );
             }
+#ifdef _VECTO
             else {
                 Proj = new Projector2D4OrderV( params, patch );
             }
+#endif
         }
         // ---------------
         // 3Dcartesian simulation
@@ -62,30 +67,30 @@ public:
             if( !vectorization ) {
                 Proj = new Projector3D2Order( params, patch );
             }
+#ifdef _VECTO
             else {
                 Proj = new Projector3D2OrderV( params, patch );
             }
+#endif
         } else if( ( params.geometry == "3Dcartesian" ) && ( params.interpolation_order == ( unsigned int )4 ) ) {
             if( !vectorization ) {
                 Proj = new Projector3D4Order( params, patch );
             }
+#ifdef _VECTO
             else {
                 Proj = new Projector3D4OrderV( params, patch );
             }
+#endif
 
+        }
         // ---------------
         // AM simulation
         // ---------------
-       } else if( params.geometry == "AMcylindrical" ) {
+        else if( params.geometry == "AMcylindrical" ) {
             if (params.is_spectral){
                 Proj = new ProjectorAM1Order( params, patch );
             } else {
-                if( !vectorization ) {
-                    Proj = new ProjectorAM2Order( params, patch );
-                }
-                else {
-                    Proj = new ProjectorAM2OrderV( params, patch );
-                }
+                Proj = new ProjectorAM2Order( params, patch );
             }
         } else {
             ERROR_NAMELIST( "Unknwon parameters : " << params.geometry << ", Order : " << params.interpolation_order,

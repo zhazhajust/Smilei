@@ -15,20 +15,10 @@
 #include "Interpolator.h"
 #include "Projector.h"
 
-// Fine timer ids
-#define interpolation_timer_id_     0
-#define push_timer_id_              1
-#define projection_timer_id_        2
-#define cell_keys_timer_id_         3
-#define ionization_timer_id_        4
-#define radiation_timer_id_         5
-#define mBW_timer_id_               6
-#define interp_fields_env_timer_id_ 7
-
 class DomainDecomposition;
+class Collisions;
 class Diagnostic;
 class SimWindow;
-class BinaryProcesses;
 
 //! Class Patch :
 //!   - data container
@@ -43,9 +33,9 @@ class Patch
     friend class AsyncMPIbuffers;
 public:
     //! Constructor for Patch
-    Patch( Params &params, SmileiMPI *smpi, DomainDecomposition *domain_decomposition, unsigned int ipatch );
+    Patch( Params &params, SmileiMPI *smpi, DomainDecomposition *domain_decomposition, unsigned int ipatch, unsigned int n_moved );
     //! Cloning Constructor for Patch
-    Patch( Patch *patch, Params &params, SmileiMPI *smpi, unsigned int ipatch );
+    Patch( Patch *patch, Params &params, SmileiMPI *smpi, DomainDecomposition *domain_decomposition, unsigned int ipatch, unsigned int n_moved, bool with_particles );
     
     //! First initialization step for patches
     void initStep1( Params &params );
@@ -76,8 +66,8 @@ public:
     
     //! Optional internal boundary condifion on Particles
     PartWalls *partWalls;
-    //! Optional binary processes operators
-    std::vector<BinaryProcesses *> vecBPs;
+    //! Optional binary collisions operators
+    std::vector<Collisions *> vecCollisions;
     
     //! Injectors of the current patch
     std::vector<ParticleInjector *> particle_injector_vector_;
@@ -98,72 +88,14 @@ public:
     //!Cartesian coordinates of the patch. X,Y,Z of the Patch according to its Hilbert index.
     std::vector<unsigned int> Pcoordinates;
     
-    std::vector<unsigned int> size_;
-    std::vector<unsigned int> oversize;
-    
-    // Detailed timers (at the patch level)
-    // -----------------------
-
-    // Initialize timers
-    // 0 - Interpolation
-    // 1 - Pusher
-    // 2 - Projection
-    // 3 - exchange init + cell_keys
-    // 4 - ionization
-    // 5 - radiation
-    // 6 - Breit-Wheeler
-    // 7 - Interp Fields_Env
-    // 8 - Proj Susceptibility
-    // 9 - Push Momentum
-    // 10 - Interp Env_Old
-    // 11 - Proj Currents
-    // 12 - Push Pos
-    // 13 - Sorting
-
-#ifdef  __DETAILED_TIMERS
-
-    // OpenMP properties
-    // -----------------------
-    
-    int number_of_threads_;
-    
     // Detailed timers
     // -----------------------
     
-    //! Timers for the patch
-    std::vector<double> patch_timers_;
-
-    //! temporary timers
-    std::vector<double> patch_tmp_timers_;
-
-#endif
-
-#ifdef __DETAILED_TIMERS
-    inline void __attribute__((always_inline)) startFineTimer(unsigned int index) {
-#ifdef _OMPTASKS
-        const int ithread = Tools::getOMPThreadNum();
-        patch_tmp_timers_[index * number_of_threads_ + ithread] = MPI_Wtime();
-#else
-        patch_tmp_timers_[index] = MPI_Wtime();
-#endif
-#else
-    inline void __attribute__((always_inline)) startFineTimer(unsigned int) {
-#endif
-    }
-    
 #ifdef  __DETAILED_TIMERS
-    inline void __attribute__((always_inline)) stopFineTimer(unsigned int index) {
-#ifdef _OMPTASKS
-        const int ithread = Tools::getOMPThreadNum();   
-        patch_timers_[index * number_of_threads_ + ithread] += MPI_Wtime() - patch_tmp_timers_[index * number_of_threads_ + ithread];
-#else
-        patch_timers_[index] += MPI_Wtime() - patch_tmp_timers_[index];
+    //! Timers for the patch
+    std::vector<double> patch_timers;
 #endif
-#else
-    inline void __attribute__((always_inline)) stopFineTimer(unsigned int) {
-#endif
-    }
-
+    
     // Random number generator.
     Random * rand_;
     
@@ -174,21 +106,21 @@ public:
     //! Clean the MPI buffers for communications
     void cleanMPIBuffers( int ispec, Params &params );
     //! manage Idx of particles per direction,
-    void initExchParticles( int ispec, Params &params );
+    void initExchParticles( SmileiMPI *smpi, int ispec, Params &params );
     //! init comm  nbr of particles
     void exchNbrOfParticles( SmileiMPI *smpi, int ispec, Params &params, int iDim, VectorPatch *vecPatch );
     //! finalize comm / nbr of particles, init exch / particles
-    void endNbrOfParticles( int ispec, int iDim );
+    void endNbrOfParticles( SmileiMPI *smpi, int ispec, Params &params, int iDim, VectorPatch *vecPatch );
     //! extract particles from main data structure to buffers, init exch / particles
     void prepareParticles( SmileiMPI *smpi, int ispec, Params &params, int iDim, VectorPatch *vecPatch );
     //! effective exchange of particles
     void exchParticles( SmileiMPI *smpi, int ispec, Params &params, int iDim, VectorPatch *vecPatch );
     //! finalize exch / particles
-    void finalizeExchParticles( int ispec, int iDim );
+    void finalizeExchParticles( SmileiMPI *smpi, int ispec, Params &params, int iDim, VectorPatch *vecPatch );
     //! Treat diagonalParticles
-    void cornersParticles( int ispec, Params &params, int iDim );
+    void cornersParticles( SmileiMPI *smpi, int ispec, Params &params, int iDim, VectorPatch *vecPatch );
     //! inject particles received in main data structure and particles sorting
-    void importAndSortParticles( int ispec, Params &params );
+    void importAndSortParticles( SmileiMPI *smpi, int ispec, Params &params, VectorPatch *vecPatch );
     //! clean memory resizing particles structure
     void cleanParticlesOverhead( Params &params );
     //! delete Particles included in the index of particles to exchange. Assumes indexes are sorted.
@@ -197,7 +129,7 @@ public:
     //! init comm / sum densities
     virtual void initSumField( Field *field, int iDim, SmileiMPI *smpi );
     //! init comm / sum densities
-    virtual void initSumFieldComplex( Field *, int, SmileiMPI * ) {};
+    virtual void initSumFieldComplex( Field *field, int iDim, SmileiMPI *smpi ) {};
     //! finalize comm / sum densities
     virtual void finalizeSumField( Field *field, int iDim );
     
@@ -289,6 +221,7 @@ public:
     
     //! Compute MPI rank of neigbors patch regarding neigbors patch Ids
     void updateMPIenv( SmileiMPI *smpi );
+    void updateTagenv( SmileiMPI *smpi );
     
     // Test who is MPI neighbor of current patch
     inline bool is_a_MPI_neighbor( int iDim, int iNeighbor )
@@ -342,7 +275,7 @@ public:
     {
         return min_local_[i];
     }
-    //! Return real (excluding oversize) max coordinates for direction i
+    //! Return real (excluding oversize) min coordinates (ex : rank 0 returns 0.) for direction i
     //! @see min_local_
     inline double getDomainLocalMax( int i ) const
     {
@@ -397,9 +330,6 @@ public:
     //    cell_starting_global_index[0] += (idx_moved);
     //}
     
-    //! Update Poyting quantities depending on location of the patch
-    virtual void computePoynting();
-    
     //! MPI rank of current patch
     int MPI_me_;
     
@@ -414,9 +344,7 @@ public:
     std::vector<MPI_Request> requests_;
     
     bool is_small = true;
-
-    void copySpeciesBinsInLocalDensities(int ispec, int clrw, Params &params, bool diag_flag);
-    void copySpeciesBinsInLocalSusceptibility(int ispec, int clrw, Params &params, bool diag_flag);
+    
         
 protected:
     // Complementary members for the description of the geometry
@@ -444,6 +372,8 @@ protected:
     //!     - concerns ghost data
     //!     - "- oversize" on rank 0
     std::vector<int> cell_starting_global_index;
+    
+    std::vector<unsigned int> oversize;
     
     double cell_volume;
     

@@ -1,6 +1,5 @@
 import os, re, numpy as np, math
 from scipy.interpolate import interp1d as interp
-from scipy.ndimage import gaussian_filter, maximum_filter1d
 import happi
 
 S = happi.Open(["./restart*"], verbose=False)
@@ -17,8 +16,8 @@ Validate("Ez field at iteration 1000", Ez, 1e-9)
 
 # VERIFY THE IONIZATION RATE Vs THEORY
 w_r = S.namelist.Main.reference_angular_frequency_SI
-au_to_w0 = 4.134137172e+16 / w_r
-Ec_to_au = 3.314742578e-15 * w_r
+au_to_w0 = 4.134137172e+16 / w_r;
+Ec_to_au = 3.314742578e-15 * w_r;
 a0 = S.namelist.Laser[0].space_envelope[1]
 
 def calculate_ionization(Ip, l):
@@ -89,10 +88,6 @@ Validate("Scalar Dens_electron", S.Scalar.Dens_electron().getData(), 0.003)
 Validate("Scalar Ntot_electron", S.Scalar.Ntot_electron().getData(), 100.)
 Validate("Scalar Zavg_carbon"  , S.Scalar.Zavg_carbon  ().getData(), 0.2)
 
-# # TRACKING DIAGNOSTIC
-d = S.TrackParticles("electron", axes=["Id","x","Wy"], timesteps=1000).getData()
-keep = d["Id"] > 0
-order = np.argsort(d["x"][keep])
-Validate("Track electron x", d["x"][keep][order][::200], 1e-4)
-Validate("Track electron Wy", gaussian_filter(maximum_filter1d(d["Wy"][keep][order],20),200)[::200], 1e-5)
+
+
 

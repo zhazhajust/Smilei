@@ -4,15 +4,15 @@
 
 Pusher::Pusher( Params &params, Species *species ) :
     min_loc_vec( species->min_loc_vec ),
-    vecto( params.vectorization_mode=="on" || params.vectorization_mode=="adaptive_mixed_sort" || params.vectorization_mode=="adaptive" || params.cell_sorting_ )
+    vecto( params.vectorization_mode=="on" || params.vectorization_mode=="adaptive_mixed_sort" || params.vectorization_mode=="adaptive" || params.cell_sorting )
 {
     for( unsigned int ipos=0; ipos < params.nDim_particle ; ipos++ ) {
         dx_inv_[ipos] = species->dx_inv_[ipos];
     }
     
     nspace[0] = 0;
-    nspace[1] = params.patch_size_[1]+1;
-    nspace[2] = params.patch_size_[2]+1;
+    nspace[1] = params.n_space[1]+1;
+    nspace[2] = params.n_space[2]+1;
     
     mass_          = species->mass_;
     if( mass_ > 0. ) {

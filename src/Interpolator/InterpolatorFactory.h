@@ -18,18 +18,18 @@
 #include "Interpolator3DWT2Order.h"
 #include "Interpolator3DWT4Order.h"
 
+#ifdef _VECTO
 #include "Interpolator1D2OrderV.h"
 #include "Interpolator2D2OrderV.h"
 #include "Interpolator2D4OrderV.h"
 #include "Interpolator3D2OrderV.h"
 #include "Interpolator3D4OrderV.h"
-#include "InterpolatorAM2OrderV.h"
-
 #include "Interpolator1DWT2OrderV.h"
 #include "Interpolator2DWT2OrderV.h"
 #include "Interpolator2DWT4OrderV.h"
 #include "Interpolator3DWT2OrderV.h"
 #include "Interpolator3DWT4OrderV.h"
+#endif
 
 #include "Params.h"
 #include "Patch.h"
@@ -43,17 +43,29 @@ public:
     {
         
         Interpolator *Interp = NULL;
-        
         // ---------------
         // 1Dcartesian simulation
         // ---------------
         if( ( params.geometry == "1Dcartesian" ) && ( params.interpolation_order == 2 ) ) {
+//             if( !vectorization ) {
+//                if ( params.interpolator_ == "momentum-conserving" ) {
+//                    Interp = new Interpolator1D2Order( params, patch );
+//                }
+//                else if ( params.interpolator_ == "wt" ) {
+//                    Interp = new Interpolator1DWT2Order( params, patch );
+//                    wt_used = true;
+//                }
+//             }
+// #ifdef _VECTO
+//             else {
                 if ( params.interpolator_ == "momentum-conserving" ) {
                     Interp = new Interpolator1D2OrderV( params, patch );
                 }
                 else if ( params.interpolator_ == "wt" ) {
                     Interp = new Interpolator1DWT2OrderV( params, patch );
                 }
+            // }
+// #endif
         } else if( ( params.geometry == "1Dcartesian" ) && ( params.interpolation_order == 4 ) ) {
             if( params.interpolator_ == "momentum-conserving" ) {
                 Interp = new Interpolator1D4Order( params, patch );
@@ -74,6 +86,7 @@ public:
                     Interp = new Interpolator2DWT2Order( params, patch );
                 }
             }
+#ifdef _VECTO
             else {
                 if( params.interpolator_ == "momentum-conserving" ) {
                     Interp = new Interpolator2D2OrderV( params, patch );
@@ -82,6 +95,7 @@ public:
                     Interp = new Interpolator2DWT2OrderV( params, patch );
                 }
             }
+#endif
         } else if( ( params.geometry == "2Dcartesian" ) && ( params.interpolation_order == 4 ) ) {
             if( !vectorization ) {
                 if( params.interpolator_ == "momentum-conserving" ) {
@@ -91,6 +105,7 @@ public:
                     Interp = new Interpolator2DWT4Order( params, patch );
                 }
             }
+#ifdef _VECTO
             else {
                 if( params.interpolator_ == "momentum-conserving" ) {
                     Interp = new Interpolator2D4OrderV( params, patch );
@@ -99,6 +114,7 @@ public:
                     Interp = new Interpolator2DWT4OrderV( params, patch );
                 }
             }
+#endif
         }
         // ---------------
         // 3Dcartesian simulation
@@ -112,6 +128,7 @@ public:
                     Interp = new Interpolator3DWT2Order( params, patch );
                 }
             }
+#ifdef _VECTO
             else {
                 if( params.interpolator_ == "momentum-conserving" ) {
                     Interp = new Interpolator3D2OrderV( params, patch );
@@ -120,6 +137,7 @@ public:
                     Interp = new Interpolator3DWT2OrderV( params, patch );
                 }
             }
+#endif
         } else if( ( params.geometry == "3Dcartesian" ) && ( params.interpolation_order == 4 ) ) {
             if( !vectorization ) {
                 if( params.interpolator_ == "momentum-conserving" ) {
@@ -129,6 +147,7 @@ public:
                     Interp = new Interpolator3DWT4Order( params, patch );
                 }
             }
+#ifdef _VECTO
             else {
                 if( params.interpolator_ == "momentum-conserving" ) {
                     Interp = new Interpolator3D4OrderV( params, patch );
@@ -137,18 +156,14 @@ public:
                     Interp = new Interpolator3DWT4OrderV( params, patch );
                 }
             }
+#endif
         }
         // ---------------
         // AM simulation
         // ---------------
         else if( params.geometry == "AMcylindrical" ) {
             if ( !params.is_spectral){
-                if( !vectorization ) {
-                    Interp = new InterpolatorAM2Order( params, patch );
-                }
-                else {
-                    Interp = new InterpolatorAM2OrderV( params, patch );
-                }
+                Interp = new InterpolatorAM2Order( params, patch );
             } else {
                 Interp = new InterpolatorAM1Order( params, patch );
             }

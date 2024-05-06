@@ -18,19 +18,19 @@ using namespace std;
 Projector2D4OrderV::Projector2D4OrderV( Params &params, Patch *patch ) : Projector2D( params, patch )
 {
     dx_inv_   = 1.0/params.cell_length[0];
-    dx_ov_dt_  = params.cell_length[0] / params.timestep;
+    dx_ov_dt  = params.cell_length[0] / params.timestep;
     dy_inv_   = 1.0/params.cell_length[1];
-    dy_ov_dt_  = params.cell_length[1] / params.timestep;
+    dy_ov_dt  = params.cell_length[1] / params.timestep;
 
-    i_domain_begin_ = patch->getCellStartingGlobalIndex( 0 );
-    j_domain_begin_ = patch->getCellStartingGlobalIndex( 1 );
+    i_domain_begin = patch->getCellStartingGlobalIndex( 0 );
+    j_domain_begin = patch->getCellStartingGlobalIndex( 1 );
 
-    nscelly_ = params.patch_size_[1] + 1;
+    nscelly = params.n_space[1] + 1;
 
     oversize[0] = params.oversize[0];
     oversize[1] = params.oversize[1];
 
-    nprimy = nscelly_ + 2*oversize[1];
+    nprimy = nscelly + 2*oversize[1];
 
     dq_inv[0] = dx_inv_;
     dq_inv[1] = dy_inv_;
@@ -61,7 +61,7 @@ void Projector2D4OrderV::currentsAndDensity( double * __restrict__ Jx,
                                              int * __restrict__ iold,
                                              double * __restrict__ deltaold,
                                              unsigned int buffer_size,
-                                             int ipart_ref, int bin_shift )
+                                             int ipart_ref )
 {
     // -------------------------------------
     // Variable declaration & initialization
@@ -97,7 +97,7 @@ void Projector2D4OrderV::currentsAndDensity( double * __restrict__ Jx,
     }
 
     // Jx, Jy, Jz
-    currents( Jx, Jy, Jz, particles, istart, iend, invgf, iold, deltaold, buffer_size, ipart_ref, bin_shift );
+    currents( Jx, Jy, Jz, particles, istart, iend, invgf, iold, deltaold, buffer_size, ipart_ref );
 
     // rho^(p,p,d)
     cell_nparts = ( int )iend-( int )istart;
@@ -117,7 +117,7 @@ void Projector2D4OrderV::currentsAndDensity( double * __restrict__ Jx,
             //                            X                                 //
             double pos = position_x[ivect+ipart+istart] * dx_inv_;
             int cell = round( pos );
-            int cell_shift = cell-ipo-i_domain_begin_;
+            int cell_shift = cell-ipo-i_domain_begin;
             double delta  = pos - ( double )cell;
             double delta2 = delta*delta;
             double delta3 = delta2*delta;
@@ -140,7 +140,7 @@ void Projector2D4OrderV::currentsAndDensity( double * __restrict__ Jx,
             //                            Y                                 //
             pos = position_y[ivect+ipart+istart] * dy_inv_;
             cell = round( pos );
-            cell_shift = cell-jpo-j_domain_begin_;
+            cell_shift = cell-jpo-j_domain_begin;
             delta  = pos - ( double )cell;
             delta2 = delta*delta;
             delta3 = delta2*delta;
@@ -201,7 +201,7 @@ void Projector2D4OrderV::currentsAndDensity( double * __restrict__ Jx,
 // ---------------------------------------------------------------------------------------------------------------------
 //! Project charge : frozen & diagFields timstep (not vectorized)
 // ---------------------------------------------------------------------------------------------------------------------
-void Projector2D4OrderV::basic( double *rhoj, Particles &particles, unsigned int ipart, unsigned int type, int /*bin_shift*/ )
+void Projector2D4OrderV::basic( double *rhoj, Particles &particles, unsigned int ipart, unsigned int type )
 {
     //Warning : this function is used for frozen species or initialization only and doesn't use the standard scheme.
     //rho type = 0
@@ -273,8 +273,8 @@ void Projector2D4OrderV::basic( double *rhoj, Particles &particles, unsigned int
     // ---------------------------
     // Calculate the total current
     // ---------------------------
-    ip -= i_domain_begin_ + 3;
-    jp -= j_domain_begin_ + 3;
+    ip -= i_domain_begin + 3;
+    jp -= j_domain_begin + 3;
 
     for( unsigned int i=0 ; i<7 ; i++ ) {
         iloc = ( i+ip )*ny+jp;
@@ -365,10 +365,10 @@ void Projector2D4OrderV::ionizationCurrents( Field *Jx, Field *Jy, Field *Jz,
     Syd[3] = dble_19_ov_96   + dble_11_ov_24 * ypmyjd  + dble_1_ov_4  * ypmyjd2 - dble_1_ov_6  * ypmyjd3 - dble_1_ov_6  * ypmyjd4;
     Syd[4] = dble_1_ov_384   + dble_1_ov_48  * ypmyjd  + dble_1_ov_16 * ypmyjd2 + dble_1_ov_12 * ypmyjd3 + dble_1_ov_24 * ypmyjd4;
 
-    ip  -= i_domain_begin_;
-    id  -= i_domain_begin_;
-    jp  -= j_domain_begin_;
-    jd  -= j_domain_begin_;
+    ip  -= i_domain_begin;
+    id  -= i_domain_begin;
+    jp  -= j_domain_begin;
+    jd  -= j_domain_begin;
 
     for (unsigned int i=0 ; i<5 ; i++) {
         int iploc=ip+i-2;
@@ -400,7 +400,7 @@ void Projector2D4OrderV::currents( double * __restrict__ Jx,
                                    int * __restrict__ iold,
                                    double * __restrict__ deltaold,
                                    unsigned int buffer_size,
-                                   int ipart_ref, int /*bin_shift*/ )
+                                   int ipart_ref )
 {
 
     // std::cerr << "Projection" << std::endl;
@@ -516,7 +516,7 @@ void Projector2D4OrderV::currents( double * __restrict__ Jx,
             //                            X                                 //
             double pos = position_x[ivect+ipart+istart] * dx_inv_;
             int cell = round( pos );
-            int cell_shift = cell-ipo-i_domain_begin_;
+            int cell_shift = cell-ipo-i_domain_begin;
             delta  = pos - ( double )cell;
             delta2 = delta*delta;
             delta3 = delta2*delta;
@@ -557,7 +557,7 @@ void Projector2D4OrderV::currents( double * __restrict__ Jx,
             //                            Y                                 //
             pos = position_y[ivect+ipart+istart] * dy_inv_;
             cell = round( pos );
-            cell_shift = cell-jpo-j_domain_begin_;
+            cell_shift = cell-jpo-j_domain_begin;
             delta  = pos - ( double )cell;
             delta2 = delta*delta;
             delta3 = delta2*delta;
@@ -613,7 +613,7 @@ void Projector2D4OrderV::currents( double * __restrict__ Jx,
         for( int ipart=0 ; ipart<np_computed; ipart++ ) {
 
             //optrpt complains about the following loop but not unrolling it actually seems to give better result.
-            double crx_p = charge_weight[ipart]*dx_ov_dt_;
+            double crx_p = charge_weight[ipart]*dx_ov_dt;
 
             double sum[7];
             sum[0] = 0.;
@@ -644,7 +644,7 @@ void Projector2D4OrderV::currents( double * __restrict__ Jx,
         #pragma omp simd
         for( int ipart=0 ; ipart<np_computed; ipart++ ) {
             //optrpt complains about the following loop but not unrolling it actually seems to give better result.
-            double cry_p = charge_weight[ipart]*dy_ov_dt_;
+            double cry_p = charge_weight[ipart]*dy_ov_dt;
 
             double sum[7];
             sum[0] = 0.;
@@ -809,8 +809,8 @@ void Projector2D4OrderV::currentsAndDensityWrapper( ElectroMagn *EMfields, Parti
     //}
     int iold[2];
 
-    iold[0] = scell/nscelly_+oversize[0];
-    iold[1] = ( scell%nscelly_ )+oversize[1];
+    iold[0] = scell/nscelly+oversize[0];
+    iold[1] = ( scell%nscelly )+oversize[1];
 
     // If no field diagnostics this timestep, then the projection is done directly on the total arrays
     if( !diag_flag ) {
@@ -835,7 +835,7 @@ void Projector2D4OrderV::currentsAndDensityWrapper( ElectroMagn *EMfields, Parti
 }
 
 
-void Projector2D4OrderV::susceptibility( ElectroMagn *, Particles &, double , SmileiMPI *, int, int, int, int, int )
+void Projector2D4OrderV::susceptibility( ElectroMagn *EMfields, Particles &particles, double species_mass, SmileiMPI *smpi, int istart, int iend,  int ithread, int scell, int ipart_ref )
 {
     ERROR( "Projection and interpolation for the envelope model are implemented only for interpolation_order = 2" );
 }

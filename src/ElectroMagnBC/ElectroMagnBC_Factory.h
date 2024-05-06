@@ -213,7 +213,12 @@ public:
             }
             
             // R DIRECTION
-            emBoundCond[2] = NULL ; //Axis BC are handeled directly in solvers.
+            if( params.EM_BCs[1][0] == "PML" ) {
+                emBoundCond[2] = new ElectroMagnBCAM_PML( params, patch, 2 );
+            }
+            else {
+                emBoundCond[2] = NULL ; //Axis BC are handeled directly in solvers.
+            }
             if( params.EM_BCs[1][1] == "periodic" ) {
                 ERROR( "Periodic EM Rmax-boundary condition is not supported`" );
             } else if( params.EM_BCs[1][1] == "buneman" ) {

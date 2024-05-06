@@ -2,7 +2,6 @@
 #include "Params.h"
 #include "Laser.h"
 #include "Patch.h"
-#include "ElectroMagn.h"
 #include "H5.h"
 
 #include <cmath>
@@ -238,7 +237,7 @@ Laser::Laser( Params &params, int ilaser, Patch *patch, bool verbose )
 
 
 // Cloning constructor
-Laser::Laser( Laser *laser, Params & )
+Laser::Laser( Laser *laser, Params &params )
 {
     i_boundary_  = laser->i_boundary_;
     spacetime = laser->spacetime;
@@ -339,10 +338,15 @@ LaserProfileSeparable::~LaserProfileSeparable()
 }
 
 
-void LaserProfileSeparable::createFields( Params &params, Patch *, ElectroMagn *EMfields )
+void LaserProfileSeparable::createFields( Params &params, Patch *patch )
 {
-    std::vector<unsigned int> size( EMfields->size_ );
-    std::vector<unsigned int> oversize( EMfields->oversize );
+    // Region size for SDMD
+    std::vector<unsigned int> n_space( params.n_space );
+    std::vector<unsigned int> oversize( params.oversize );
+    if( params.multiple_decomposition && patch->vecSpecies.empty() ) {
+        n_space = params.n_space_region;
+        oversize = params.region_oversize;
+    }
     
     vector<unsigned int> dim = { 1, 1 };
     
@@ -354,11 +358,11 @@ void LaserProfileSeparable::createFields( Params &params, Patch *, ElectroMagn *
     // Size in first direction
     if( params.geometry=="2Dcartesian" || params.geometry=="3Dcartesian" ) {
         unsigned int ax1 = ( axis_ == 0 ) ? 1 : 0;
-        unsigned int n_p = size[ax1] + 1 + 2*oversize[ax1];
+        unsigned int n_p = n_space[ax1] + 1 + 2*oversize[ax1];
         unsigned int n_d = n_p + 1;
         dim[0] = primal_ ? n_p : n_d;
     } else if( params.geometry=="AMcylindrical" ) {
-        unsigned int nr_p = size[1] + 1 + 2*oversize[1];
+        unsigned int nr_p = n_space[1] + 1 + 2*oversize[1];
         unsigned int nr_d = nr_p + 1;
         dim[0] = nr_p + nr_d;
     }
@@ -366,7 +370,7 @@ void LaserProfileSeparable::createFields( Params &params, Patch *, ElectroMagn *
     // Size in second direction
     if( params.geometry=="3Dcartesian" ) {
         unsigned int ax2 = ( axis_ == 2 ) ? 1 : 2;
-        unsigned int n_p = size[ax2] + 1 + 2*oversize[ax2];
+        unsigned int n_p = n_space[ax2] + 1 + 2*oversize[ax2];
         unsigned int n_d = n_p + 1;
         dim[1] = primal_ ? n_d : n_p;
     }
@@ -376,10 +380,15 @@ void LaserProfileSeparable::createFields( Params &params, Patch *, ElectroMagn *
     phase          = new Field2D( dim );
 }
 
-void LaserProfileSeparable::initFields( Params &params, Patch *patch, ElectroMagn *EMfields )
+void LaserProfileSeparable::initFields( Params &params, Patch *patch )
 {
-    std::vector<unsigned int> size( EMfields->size_ );
-    std::vector<unsigned int> oversize( EMfields->oversize );
+    // Region size for SDMD
+    std::vector<unsigned int> n_space(params.n_space);
+    std::vector<unsigned int> oversize(params.oversize);
+    if( params.multiple_decomposition && patch->vecSpecies.empty() ) {
+        n_space = params.n_space_region;
+        oversize = params.region_oversize;
+    }
     
     if( params.geometry=="1Dcartesian" ) {
         
@@ -392,7 +401,7 @@ void LaserProfileSeparable::initFields( Params &params, Patch *patch, ElectroMag
     } else if( params.geometry=="2Dcartesian" ) {
         
         unsigned int ax1 = ( axis_ == 0 ) ? 1 : 0;
-        unsigned int n_p = size[ax1] + 1 + 2*oversize[ax1];
+        unsigned int n_p = n_space[ax1] + 1 + 2*oversize[ax1];
         unsigned int n_d = n_p + 1;
         double d = params.cell_length[ax1];
         unsigned int dim = primal_ ? n_p : n_d;
@@ -408,7 +417,7 @@ void LaserProfileSeparable::initFields( Params &params, Patch *patch, ElectroMag
         
     } else if( params.geometry=="AMcylindrical" ) {
         
-        unsigned int nr_p = size[1]+1+2*oversize[1];
+        unsigned int nr_p = n_space[1]+1+2*oversize[1];
         unsigned int nr_d = nr_p+1;
         double dr = params.cell_length[1];
         unsigned int dim = nr_p + nr_d; // Need to account for both primal and dual positions
@@ -425,9 +434,9 @@ void LaserProfileSeparable::initFields( Params &params, Patch *patch, ElectroMag
         
         unsigned int ax1 = ( axis_ == 0 ) ? 1 : 0;
         unsigned int ax2 = ( axis_ == 2 ) ? 1 : 2;
-        unsigned int n1_p = size[ax1] + 1 + 2*oversize[ax1];
+        unsigned int n1_p = n_space[ax1] + 1 + 2*oversize[ax1];
         unsigned int n1_d = n1_p + 1;
-        unsigned int n2_p = size[ax2] + 1 + 2*oversize[ax2];
+        unsigned int n2_p = n_space[ax2] + 1 + 2*oversize[ax2];
         unsigned int n2_d = n2_p + 1;
         double d1 = params.cell_length[ax1];
         double d2 = params.cell_length[ax2];
@@ -450,7 +459,7 @@ void LaserProfileSeparable::initFields( Params &params, Patch *patch, ElectroMag
 }
 
 // Amplitude of a separable laser profile
-double LaserProfileSeparable::getAmplitude( std::vector<double>, double t, int j, int k )
+double LaserProfileSeparable::getAmplitude( std::vector<double> pos, double t, int j, int k )
 {
     double amp;
     #pragma omp critical
@@ -471,7 +480,7 @@ LaserProfileNonSeparable::~LaserProfileNonSeparable()
 }
 
 
-void LaserProfileFile::createFields( Params &params, Patch *, ElectroMagn * )
+void LaserProfileFile::createFields( Params &params, Patch *patch )
 {
     if( params.geometry!="2Dcartesian" && params.geometry!="3Dcartesian" ) {
         ERROR_NAMELIST( "Unknown geometry in LaserOffset (cartesian 2D or 3D only)",
@@ -482,15 +491,20 @@ void LaserProfileFile::createFields( Params &params, Patch *, ElectroMagn * )
     phase     = new Field3D();
 }
 
-void LaserProfileFile::initFields( Params &params, Patch *patch, ElectroMagn *EMfields )
+void LaserProfileFile::initFields( Params &params, Patch *patch )
 {
     // This is handled in checkpoints when restarting
     if( params.restart ) {
         return;
     }
     
-    std::vector<unsigned int> size( EMfields->size_ );
-    std::vector<unsigned int> oversize( EMfields->oversize );
+    // Region size for SDMD
+    std::vector<unsigned int> n_space(params.n_space);
+    std::vector<unsigned int> oversize(params.oversize);
+    if( params.multiple_decomposition && patch->vecSpecies.empty() ) {
+        n_space = params.n_space_region;
+        oversize = params.region_oversize;
+    }
     
     unsigned int ndim = 2;
     if( params.geometry=="3Dcartesian" ) {
@@ -500,8 +514,8 @@ void LaserProfileFile::initFields( Params &params, Patch *patch, ElectroMagn *EM
     // Define the part of the array to obtain
     unsigned int ax1 = ( axis_ == 0 ) ? 1 : 0;
     vector<hsize_t> dim( ndim ), offset( ndim );
-    hsize_t n1_tot = params.global_size_[ax1] + 2 + 2*params.oversize[ax1];
-    hsize_t n1_p = size[ax1] + 1 + 2*oversize[ax1];
+    hsize_t n1_tot = params.n_space_global[ax1] + 2 + 2*params.oversize[ax1];
+    hsize_t n1_p = n_space[ax1] + 1 + 2*oversize[ax1];
     hsize_t n1_d = n1_p + 1;
     dim[0] = primal_ ? n1_p : n1_d;
     dim[1] = 1;
@@ -510,7 +524,7 @@ void LaserProfileFile::initFields( Params &params, Patch *patch, ElectroMagn *EM
     
     if( ndim == 3 ) {
         unsigned int ax2 = ( axis_ == 2 ) ? 1 : 2;
-        hsize_t n2_p = size[ax2] + 1 + 2*oversize[ax2];
+        hsize_t n2_p = n_space[ax2] + 1 + 2*oversize[ax2];
         hsize_t n2_d = n2_p + 1;
         dim[1] = primal_ ? n2_d : n2_p;
         offset[1] = patch->getCellStartingGlobalIndex( ax2 ) + oversize[ax2];

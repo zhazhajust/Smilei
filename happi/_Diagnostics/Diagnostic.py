@@ -53,7 +53,6 @@ class Diagnostic(object):
 		self._cell_length    = self.simulation._cell_length
 		self._ncels          = self.simulation._ncels
 		self.timestep        = self.simulation._timestep
-		self._ureg           = self.simulation._ureg
 		
 		# Make the Options object
 		self.options = Options()
@@ -66,7 +65,7 @@ class Diagnostic(object):
 		if type(self.units) is not Units:
 			self._error += ["Could not understand the 'units' argument"]
 			return
-		self.units._initRegistry(self._ureg)
+		self.units.prepare(self.simulation._reference_angular_frequency_SI)
 		
 		# Call the '_init' function of the child class
 		remaining_kwargs = self._init(*args, **kwargs)
@@ -75,12 +74,18 @@ class Diagnostic(object):
 			self._error += ["The following keyword-arguments are unknown: "+", ".join(remaining_kwargs.keys())]
 			return
 		
+		# Prepare units for axes
 		self.dim = len(self._shape)
 		if self.valid:
-			self._prepareUnits()
+			xunits = None
+			yunits = None
+			if self.dim > 0: xunits = self._units[0]
+			if self.dim > 1: yunits = self._units[1]
+			self.units.convertAxes(xunits, yunits, self._vunits)
 		
 		# Prepare data_log output
-		self._dataAtTime = self._dataLogAtTime if self._data_log else self._dataLinAtTime
+		if self._data_log:
+			self._dataAtTime = self._dataLogAtTime
 		
 	# When no action is performed on the object, this is what appears
 	def __repr__(self):
@@ -99,12 +104,6 @@ class Diagnostic(object):
 			print("\n".join(self._error))
 			return False
 		return True
-	
-	# Prepare units for axes
-	def _prepareUnits(self):
-		xunits = self._units[0] if len(self._shape) > 0 else None 
-		yunits = self._units[1] if len(self._shape) > 1 else None
-		self.units.convertAxes(xunits, yunits, self._vunits)
 
 	# Method to set optional plotting arguments
 	def set(self, **kwargs):
@@ -197,8 +196,7 @@ class Diagnostic(object):
 			The name of the requested axis.
 		timestep: int
 			The timestep at which the axis is obtained. Only matters in ParticleBinning,
-			Screen and RadiationSpectrum when `auto` axis limits are requested; or in
-			Field when `moving=True`.
+			Screen and RadiationSpectrum when `auto` axis limits are requested.
 
 		Returns:
 		--------
@@ -248,7 +246,7 @@ class Diagnostic(object):
 		else:
 			return axes
 
-	def plot(self, timestep=None, saveAs=None, axes=None, dpi=200, **kwargs):
+	def plot(self, timestep=None, saveAs=None, axes=None, **kwargs):
 		""" Plots the diagnostic.
 
 		Parameters:
@@ -270,8 +268,6 @@ class Diagnostic(object):
 			You can even specify a filename such as mydir/prefix.png
 			and it will automatically make successive files showing
 			the timestep: mydir/prefix0.png, mydir/prefix1.png, etc.
-        dpi: (default: 200)
-            The number of dots per inch for `saveAs`
 
 		Example:
 		--------
@@ -291,14 +287,14 @@ class Diagnostic(object):
 			print("ERROR: timestep "+str(timestep)+" not available")
 			return
 
-		save = SaveAs(saveAs, fig, dpi)
+		save = SaveAs(saveAs, fig, self._plt)
 		self._plotOnAxes(ax, timestep)
 		self._plt.draw()
 		self._plt.pause(0.00001)
 		save.frame()
 		return
 
-	def streak(self, saveAs=None, axes=None, dpi=200, **kwargs):
+	def streak(self, saveAs=None, axes=None, **kwargs):
 		""" Plots the diagnostic with one axis being time.
 
 		Parameters:
@@ -318,8 +314,6 @@ class Diagnostic(object):
 			You can even specify a filename such as mydir/prefix.png
 			and it will automatically make successive files showing
 			the timestep: mydir/prefix0.png, mydir/prefix1.png, etc.
-        dpi: (default: 200)
-            The number of dots per inch for `saveAs`
 
 		Example:
 		--------
@@ -373,7 +367,7 @@ class Diagnostic(object):
 		self._plt.pause(0.00001)
 
 		# Save?
-		save = SaveAs(saveAs, fig, dpi)
+		save = SaveAs(saveAs, fig, self._plt)
 		save.frame()
 
 	def animate(self, movie="", fps=15, dpi=200, saveAs=None, axes=None, **kwargs):
@@ -399,8 +393,8 @@ class Diagnostic(object):
 			If movie="" no movie is created.
 		fps: int (default: 15)
 			Number of frames per second (only if movie requested).
-        dpi: (default: 200)
-            The number of dots per inch for `movie` or `saveAs`
+		dpi: int (default: 200)
+			Number of dots per inch (only if movie requested).
 		saveAs: path string (default: None)
 			Name of a directory where to save each frame as figures.
 			You can even specify a filename such as mydir/prefix.png
@@ -428,7 +422,7 @@ class Diagnostic(object):
 		# Movie requested ?
 		mov = Movie(fig, movie, fps, dpi)
 		# Save to file requested ?
-		save = SaveAs(saveAs, fig, dpi)
+		save = SaveAs(saveAs, fig, self._plt)
 		# Plot first time
 		self._plotOnAxes(ax, self._timesteps[0])
 		mov.grab_frame()
@@ -700,26 +694,14 @@ class Diagnostic(object):
 		if xmax is not None: ax.set_xlim(right=xmax)
 		if ymin is not None: ax.set_ylim(bottom=ymin)
 		if ymax is not None: ax.set_ylim(top=ymax)
-	
-	def _setVlimits(self, A):
-		vmin = self.options.vmin
-		vmax = self.options.vmax
-		if self.options.vsym:
-			if self.options.vsym is True:
-				vmax = self._np.abs(A).max()
-			else:
-				vmax = self._np.abs(self.options.vsym)
-			vmin = -vmax
-		return vmin, vmax
-	
+
 	# Methods to plot the data when axes are made
 	def _plotOnAxes_0D(self, ax, t, cax_id=0):
 		times = self._timesteps[self._timesteps<=t]
 		A     = self._tmpdata[self._timesteps<=t]
 		self._plot, = ax.plot(self._tfactor*times, A, **self.options.plot)
 		ax.set_xlabel(self._tlabel, self.options.labels_font["xlabel"])
-		vmin, vmax = self._setVlimits(A)
-		self._setLimits(ax, xmax=self._tfactor*self._timesteps[-1], ymin=vmin, ymax=vmax)
+		self._setLimits(ax, xmax=self._tfactor*self._timesteps[-1], ymin=self.options.vmin, ymax=self.options.vmax)
 		self._setTitle(ax, t)
 		self._setAxesOptions(ax)
 		return self._plot
@@ -729,8 +711,7 @@ class Diagnostic(object):
 		if self._log[0]: ax.set_xscale("log")
 		ax.set_xlabel(self._xlabel, self.options.labels_font["xlabel"])
 		ax.set_ylabel(self._ylabel, self.options.labels_font["ylabel"])
-		vmin, vmax = self._setVlimits(A)
-		self._setLimits(ax, xmin=self.options.xmin, xmax=self.options.xmax, ymin=vmin, ymax=vmax)
+		self._setLimits(ax, xmin=self.options.xmin, xmax=self.options.xmax, ymin=self.options.vmin, ymax=self.options.vmax)
 		self._setTitle(ax, t)
 		self._setAxesOptions(ax)
 		return self._plot
@@ -751,9 +732,6 @@ class Diagnostic(object):
 				ax.divider = divider
 			cax = divider.append_axes(**self.options.cax)
 			ax.cax[cax_id] = self._plt.colorbar(mappable=self._plot, cax=cax, **self.options.colorbar)
-		vmin, vmax = self._setVlimits(A)
-		self._plot.set_clim(vmin, vmax)
-		ax.cax[cax_id].mappable.set_clim(vmin, vmax)
 		self._setTitle(ax, t)
 		self._setAxesOptions(ax)
 		self._setColorbarOptions(ax.cax[cax_id].ax)
@@ -766,8 +744,7 @@ class Diagnostic(object):
 		self._plot.set_xdata( self._tfactor*times )
 		self._plot.set_ydata( A )
 		ax.relim()
-		vmin, vmax = self._setVlimits(A)
-		self._setLimits(ax, xmax=self._tfactor*self._timesteps[-1], ymin=vmin, ymax=vmax)
+		self._setLimits(ax, xmax=self._tfactor*self._timesteps[-1], ymin=self.options.vmin, ymax=self.options.vmax)
 		self._setTitle(ax, t)
 		return self._plot
 	def _animateOnAxes_1D(self, ax, t, cax_id=0):
@@ -775,15 +752,25 @@ class Diagnostic(object):
 		self._plot.set_xdata(self._xfactor*(self._xoffset+self._centers[0]))
 		self._plot.set_ydata(A)
 		ax.relim()
-		vmin, vmax = self._setVlimits(A)
-		self._setLimits(ax, xmin=self.options.xmin, xmax=self.options.xmax, ymin=vmin, ymax=vmax)
+		self._setLimits(ax, xmin=self.options.xmin, xmax=self.options.xmax, ymin=self.options.vmin, ymax=self.options.vmax)
 		self._setTitle(ax, t)
 		return self._plot
 	def _animateOnAxes_2D(self, ax, t, cax_id=0):
 		A = self._dataAtTime(t)
 		self._plot = self._animateOnAxes_2D_(ax, A)
 		self._setLimits(ax, xmin=self.options.xmin, xmax=self.options.xmax, ymin=self.options.ymin, ymax=self.options.ymax)
-		vmin, vmax = self._setVlimits(A)
+		vmin = self.options.vmin
+		vmax = self.options.vmax
+		if self.options.vsym:
+			# Don't warn here, it will be annoying if every frame
+			if self.options.vsym is True:
+				vmax = self._np.abs(A).max()
+			else:
+				vmax = self._np.abs(self.options.vsym)
+
+			vmin = -vmax
+		if vmin is None: vmin = A.min()
+		if vmax is None: vmax = A.max()
 		self._plot.set_clim(vmin, vmax)
 		ax.cax[cax_id].mappable.set_clim(vmin, vmax)
 		self._setTitle(ax, t)
@@ -793,7 +780,20 @@ class Diagnostic(object):
 	# This is overloaded by class "Probe" because it requires to replace imshow
 	# Also overloaded by class "Performances" to add a line plot
 	def _plotOnAxes_2D_(self, ax, A):
-		self._plot = ax.imshow( self._np.rot90(A), extent=self._extent, **self.options.image)
+		vmin = self.options.vmin
+		vmax = self.options.vmax
+		if self.options.vsym:
+			if vmin or vmax:
+				print("WARNING: vsym set on the same Diagnostic as vmin and/or vmax. Ignoring vmin/vmax.")
+		        
+			if self.options.vsym is True:
+				vmax = self._np.abs(A).max()
+			else:
+				vmax = self._np.abs(self.options.vsym)
+
+			vmin = -vmax
+		self._plot = ax.imshow( self._np.rot90(A),
+			vmin = vmin, vmax = vmax, extent=self._extent, **self.options.image)
 		return self._plot
 	def _animateOnAxes_2D_(self, ax, A):
 		self._plot.set_data( self._np.rot90(A) )
@@ -858,14 +858,10 @@ class Diagnostic(object):
 	def _mkdir(self, dir):
 		if not self._os.path.exists(dir): self._os.makedirs(dir)
 	
-	def _dataLinAtTime(self, t):
-		A = self._getDataAtTime(t)
-		# transform if requested
-		if callable(self._data_transform):
-			A = self._data_transform(A)
-		return self._vfactor*A
+	def _dataAtTime(self, t):
+		return self._vfactor*self._getDataAtTime(t)
 	def _dataLogAtTime(self, t):
-		return self._np.log10( self._dataLinAtTime(t) )
+		return self._np.log10( self._vfactor*self._getDataAtTime(t) )
 	
 	# Convert data to VTK format
 	def toVTK(self, numberOfPieces=1):

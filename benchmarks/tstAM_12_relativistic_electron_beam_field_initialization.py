@@ -88,18 +88,6 @@ Main(
 #)
 
 
-# a more realistic electron bunch should be initialized with numpy arrays
-def initial_velocity_longitudinal(x,r):
-	return beta
-
-def initial_velocity_radial(x,r):
-	return 1e-6
-
-def initial_velocity_theta(x,r):
-	return 1e-6
-
-initial_velocity_AM = [initial_velocity_longitudinal,initial_velocity_radial,initial_velocity_theta]
-
 Species(
     name = "bunch_electrons",
     position_initialization = "regular",
@@ -110,8 +98,7 @@ Species(
     mass = 1.0,
     charge = -1.0,
     charge_density = nbunch_,
-    #mean_velocity = [beta, 0.0, 0.0],
-    mean_velocity_AM = initial_velocity_AM, 
+    mean_velocity = [beta, 0.0, 0.0], 
     pusher = "boris",
     time_frozen = 0.0,
     boundary_conditions = [
@@ -134,25 +121,3 @@ DiagProbe(
     number   = [nx, 2*ntrans]
 )
 
-
-DiagParticleBinning(
-    #name = "my binning",
-    deposited_quantity = "weight",
-    every = 5,
-    time_average = 1,
-    species = ["bunch_electrons"],
-    axes = [
-        ["py",-0.0005, 0.0005, 20],
-    ]
-)
-
-DiagParticleBinning(
-    #name = "my binning",
-    deposited_quantity = "weight",
-    every = 5,
-    time_average = 1,
-    species = ["bunch_electrons"],
-    axes = [
-        ["pz",-0.0005, 0.0005, 20],
-    ]
-)

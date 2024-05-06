@@ -87,15 +87,12 @@ def _smilei_check():
             input*1.
             return tconstant()
         except: return input
-    Main.pml_sigma = [ toSpaceProfile(p) for p in (Main.pml_sigma ) ]
-    Main.pml_kappa = [ toSpaceProfile(p) for p in (Main.pml_kappa ) ]
     for s in Species:
         s.number_density      = toSpaceProfile(s.number_density)
         s.charge_density  = toSpaceProfile(s.charge_density)
         s.particles_per_cell = toSpaceProfile(s.particles_per_cell)
         s.charge          = toSpaceProfile(s.charge)
         s.mean_velocity   = [ toSpaceProfile(p) for p in s.mean_velocity ]
-        s.mean_velocity_AM = [ toSpaceProfile(p) for p in s.mean_velocity_AM ]
         s.temperature     = [ toSpaceProfile(p) for p in s.temperature   ]
     for e in ExternalField:
         e.profile         = toSpaceProfile(e.profile)
@@ -135,13 +132,8 @@ def _keep_python_running():
     profiles += [ant.space_time_profile for ant in Antenna]
     profiles += [e.profile for e in PrescribedField]
     if len(MovingWindow)>0 or len(LoadBalancing)>0:
-        # Verify if PML are used
-        for bcs in Main.EM_boundary_conditions:
-            for bc in bcs:
-                if (bc == "PML"):
-                    return True
         for s in Species:
-            profiles += [s.number_density, s.charge_density, s.particles_per_cell, s.charge] + s.mean_velocity + s.mean_velocity_AM + s.temperature
+            profiles += [s.number_density, s.charge_density, s.particles_per_cell, s.charge] + s.mean_velocity + s.temperature
     if len(MovingWindow)>0:
         profiles += [e.profile for e in ExternalField]
     for i in ParticleInjector:
@@ -188,35 +180,3 @@ def _noNewComponents(cls, *args, **kwargs):
     print("Please do not create a new "+cls.__name__)
     return None
 SmileiComponent.__new__ = staticmethod(_noNewComponents)
-
-# Writes some information in a pickle file for fast post-processing (set scan=False in happi)
-def writeInfo():
-    def pickable(var):
-        if var is None or type(var) in [float, int, complex, str, bytes, bool]:
-            return True
-        elif type(var) in [list, tuple]:
-            return all([pickable(v) for v in var])
-        elif type(var) is dict:
-            return all([pickable(var[k]) for k in var])
-        else:
-            try:
-                import numpy
-                if type(var) is numpy.ndarray and var.size < 10000:
-                    return True
-            except Exception:
-                pass
-            return False
-    
-    import shelve
-    singletons = {}
-    components = {}
-    with shelve.open("info.shelf") as f:
-        for name,var in globals().items():
-            if type(var) is type(Main):
-                singletons[name] = {k:v for k,v in var.__dict__.items() if not k.startswith("_") and pickable(v)}
-            elif type(var) is type(Species):
-                components[name] = [{k:v for k,v in component.__dict__.items() if not k.startswith("_") and pickable(v)} for component in var]
-            elif not name.startswith("_") and pickable(var):
-                f[name] = var
-        f["_singletons"] = singletons
-        f["_components"] = components

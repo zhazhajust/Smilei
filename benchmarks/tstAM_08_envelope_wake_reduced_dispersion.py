@@ -23,16 +23,15 @@ Main(
     cell_length  = [dx, dr],
     grid_length = [ Lx,  Lr],
 
-    number_of_AM = 2,
+    number_of_AM = 1,
 
     number_of_patches = [npatch_x,4],
     cluster_width = nx/npatch_x,
 
     EM_boundary_conditions = [
-        ["PML","PML"],
-        ["PML","PML"],
+        ["silver-muller","silver-muller"],
+        ["buneman","buneman"],
     ],
-    number_of_pml_cells = [[8,8],[1,10]],
 
     solve_poisson = False,
     print_every = 100,
@@ -57,7 +56,8 @@ LaserEnvelopeGaussianAM(
     waist           = 94.26,
     time_envelope   = tgaussian(center=center_laser, fwhm=laser_fwhm),
     envelope_solver = 'explicit_reduced_dispersion',
-    Envelope_boundary_conditions = [ ["PML", "PML"], ["PML", "PML"] ],
+    Envelope_boundary_conditions = [ ["reflective", "reflective"],
+        ["reflective", "reflective"], ],
 )
 
 

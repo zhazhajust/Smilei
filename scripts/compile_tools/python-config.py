@@ -2,9 +2,9 @@ import sys
 import os
 import getopt
 try:
-    import sysconfig
-except:
     from distutils import sysconfig
+except:
+    import sysconfig
 
 valid_opts = ['prefix', 'exec-prefix', 'includes', 'libs', 'cflags',
               'ldflags', 'help']

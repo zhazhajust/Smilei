@@ -48,6 +48,14 @@ class ParticleBinning(Diagnostic):
 				self._myinfo.update({ d:info })
 			except Exception as e:
 				raise Exception("%s #%d invalid or non-existent" % (self._diagType,d))
+		# Test the operation
+		self._include = include
+		try:
+			exec(self._re.sub('#\d+','1.',self.operation), self._include, {"t":0})
+		except ZeroDivisionError:
+			pass
+		except Exception as e:
+			raise Exception("Cannot understand operation '"+self.operation+"'")
 		# Verify that all requested diags all have the same shape
 		self._axes = {}
 		self._naxes = {}
@@ -86,8 +94,6 @@ class ParticleBinning(Diagnostic):
 		# Put data_log as object's variable
 		self._data_log = data_log
 		self._data_transform = data_transform
-		
-		self._include = include
 
 		# 2 - Manage timesteps
 		# -------------------------------------------------------------------
@@ -212,13 +218,12 @@ class ParticleBinning(Diagnostic):
 			titles[d], val_units = self._make_units(deposited_quantity, self.hasComposite)
 			units[d] = val_units + axes_units
 		# Make total units and title
-		def diagTranslator(D):
-			d = int(D[1:])
-			return units[d], "A[%d]" % d, titles[d]
-		self._operation = Operation(self.operation, diagTranslator, self._ureg)
-		self._vunits = self._operation.translated_units
-		self._title  = self._operation.title
-		
+		self._vunits = self.operation
+		self._title  = self.operation
+		for d in self._diags:
+			self._vunits = self._vunits.replace("#"+str(d), "( "+units[d]+" )")
+			self._title  = self._title .replace("#"+str(d), titles[d])
+		self._vunits = self.units._getUnits(self._vunits)
 		if user_axes:
 			self._title = "(%s)/(%s)"%(self._title, " x ".join(user_axes))
 		if deposited_quantity == "user_function":
@@ -345,15 +350,13 @@ class ParticleBinning(Diagnostic):
 	
 	# Method to print info on all included diags
 	def _info(self):
-		info = "\n"
+		info = ""
 		for d in self._diags:
-			info += self._printInfo(self._myinfo[d]) + "\n"
-		if len(self.operation)>2:
-			info += "Operation : "+self.operation+"\n"
+			info += self._printInfo(self._myinfo[d])+"\n"
+		if len(self.operation)>2: info += "Operation : "+self.operation+"\n"
 		for ax in self._axes:
 			if "averageInfo" in ax: info += ax["averageInfo"]+"\n"
 			if "subsetInfo" in ax: info += ax["subsetInfo"]+"\n"
-		info += self._units_explanation+"\n"
 		return info
 	
 	def _updateAxes(self, timestep):
@@ -434,19 +437,9 @@ class ParticleBinning(Diagnostic):
 		self._selection = tuple(self._selection)
 		
 		# If any spatial dimension did not appear, then count it for calculating the correct density
-		self._units_explanation = "The value in each bin is the sum of the `deposited_quantity` divided by the bin size"
-		axlist = []
-		if self._ndim_particles>=1 and not self._spatialaxes["x"]: 
-			coeff /= self._ncels[ 0]*self._cell_length[ 0]
-			axlist += ["grid_length[0]"]
-		if self._ndim_particles>=2 and not self._spatialaxes["y"]:
-			coeff /= self._ncels[ 1]*self._cell_length[ 1]
-			axlist += ["grid_length[1]"]
-		if self._ndim_particles==3 and not self._spatialaxes["z"]:
-			coeff /= self._ncels[-1]*self._cell_length[-1]
-			axlist += ["grid_length[-1]"]
-		if axlist:
-			self._units_explanation += " and by " + " * ".join(axlist)
+		if self._ndim_particles>=1 and not self._spatialaxes["x"]: coeff /= self._ncels[ 0]*self._cell_length[ 0]
+		if self._ndim_particles>=2 and not self._spatialaxes["y"]: coeff /= self._ncels[ 1]*self._cell_length[ 1]
+		if self._ndim_particles==3 and not self._spatialaxes["z"]: coeff /= self._ncels[-1]*self._cell_length[-1]
 		
 		# Calculate the array that represents the bins sizes in order to get units right.
 		# This array will be the same size as the plotted array
@@ -534,11 +527,16 @@ class ParticleBinning(Diagnostic):
 			# Append this diag's array for the operation
 			A.update({ d:B })
 		# Calculate operation
-		A = self._operation.eval(dict(locals(),**self._include))
+		data_operation = self.operation
+		for d in reversed(self._diags):
+			data_operation = data_operation.replace("#"+str(d),"A["+str(d)+"]")
+		A = eval(data_operation, self._include, locals())
 		# Apply the averaging
 		for iaxis in range(self._naxes):
 			if "average" in self._axes[iaxis]:
 				A = self._np.sum(A, axis=iaxis, keepdims=True)
 		# remove averaged axes
 		A = self._np.squeeze(A)
+		# transform if requested
+		if callable(self._data_transform): A = self._data_transform(A)
 		return A

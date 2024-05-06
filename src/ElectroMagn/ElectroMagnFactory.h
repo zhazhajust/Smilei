@@ -24,24 +24,24 @@ public:
     {
         ElectroMagn *EMfields = NULL;
         if( params.geometry == "1Dcartesian" ) {
-            EMfields = new ElectroMagn1D( params, vecSpecies, patch );
+            EMfields = new ElectroMagn1D( params, domain_decomposition, vecSpecies, patch );
         } else if( params.geometry == "2Dcartesian" ) {
-            EMfields = new ElectroMagn2D( params, vecSpecies, patch );
+            EMfields = new ElectroMagn2D( params, domain_decomposition, vecSpecies, patch );
         } else if( params.geometry == "3Dcartesian" ) {
-            EMfields = new ElectroMagn3D( params, vecSpecies, patch );
+            EMfields = new ElectroMagn3D( params, domain_decomposition, vecSpecies, patch );
         } else if( params.geometry == "AMcylindrical" ) {
-            EMfields = new ElectroMagnAM( params, vecSpecies, patch );
+            EMfields = new ElectroMagnAM( params, domain_decomposition, vecSpecies, patch );
         } else {
             ERROR( "Unknown geometry : " << params.geometry << "!" );
         }
         
+        EMfields->finishInitialization( vecSpecies.size(), patch );
+        
         // initialize the envelope if used
         if( params.Laser_Envelope_model ) { // for the moment it works only with one envelope
-            EMfields->envelope = EnvelopeFactory::create( params, patch );
+            EMfields->envelope = EnvelopeFactory::create( params, patch, EMfields );
         }
         
-        EMfields->finishInitialization( vecSpecies.size(), patch );
-
         bool first_creation = patch->isMaster() && ! dynamic_cast<RegionDomainDecomposition*>( domain_decomposition );
         
         // -----------------
@@ -55,7 +55,7 @@ public:
             Laser *laser = new Laser( params, ilaser, patch, first_creation );
             if( EMfields->emBoundCond[laser->i_boundary_] ) {
                 if( patch->isBoundary( laser->i_boundary_ ) ) {
-                    laser->createFields( params, patch, EMfields );
+                    laser->createFields( params, patch );
                 }
                 EMfields->emBoundCond[laser->i_boundary_]->vecLaser.push_back( laser );
             } else {
@@ -124,7 +124,16 @@ public:
             for( unsigned int ifield=0; ifield<EMfields->allFields.size(); ifield++ ) {
                 if( EMfields->allFields[ifield]
                         && fieldName==EMfields->allFields[ifield]->name ) {
-                    extField.savedField = EMfields->allFields[ifield]->clone();
+                    
+                    if (params.nDim_field == 1) {
+                        extField.savedField = new Field1D(EMfields->allFields[ifield]->dims());
+                    } else if (params.nDim_field == 2){
+                        extField.savedField = new Field2D(EMfields->allFields[ifield]->dims());
+                    } else if (params.nDim_field == 3){
+                        extField.savedField = new Field3D(EMfields->allFields[ifield]->dims());
+                    }
+                    extField.savedField->copyFrom(EMfields->allFields[ifield]);
+                    extField.savedField->name = EMfields->allFields[ifield]->name;
                     extField.index =  ifield;
                     break;
                 }
@@ -234,13 +243,13 @@ public:
             newEMfields = new ElectroMagnAM( static_cast<ElectroMagnAM *>( EMfields ), params, patch );
         }
         
+        newEMfields->finishInitialization( vecSpecies.size(), patch );
+        
         // initialize the envelope if used
         if( EMfields->envelope != NULL ) {
-            newEMfields->envelope = EnvelopeFactory::clone( EMfields->envelope, patch, params, n_moved );
+            newEMfields->envelope = EnvelopeFactory::clone( EMfields->envelope, patch, EMfields, params, n_moved );
         }
         
-        newEMfields->finishInitialization( vecSpecies.size(), patch );
-
         // -----------------
         // Clone time-average fields
         // -----------------
@@ -269,7 +278,7 @@ public:
                     Laser *laser = new Laser( EMfields->emBoundCond[iBC]->vecLaser[ilaser], params );
                     // If patch is on border, then fill the fields arrays
                     if( iBC == laser->i_boundary_ && patch->isBoundary( iBC ) ) {
-                        laser->createFields( params, patch, newEMfields );
+                        laser->createFields( params, patch );
                     }
                     // Append the laser to the vector
                     newEMfields->emBoundCond[iBC]->vecLaser.push_back( laser );
@@ -295,7 +304,14 @@ public:
             PrescribedField newpf;
             newpf.profile = EMfields->prescribedFields[n_extfield].profile;
             newpf.index   = EMfields->prescribedFields[n_extfield].index;
-            newpf.savedField = EMfields->prescribedFields[n_extfield].savedField->clone();
+            if (params.nDim_field == 1) {
+                newpf.savedField = new Field1D(EMfields->prescribedFields[n_extfield].savedField->dims());
+            } else if (params.nDim_field == 2){
+                newpf.savedField = new Field2D(EMfields->prescribedFields[n_extfield].savedField->dims());
+            } else if (params.nDim_field == 3){
+                newpf.savedField = new Field3D(EMfields->prescribedFields[n_extfield].savedField->dims());
+            }
+            newpf.savedField->copyFrom(EMfields->allFields[newpf.index]);
             newEMfields->prescribedFields.push_back( newpf );
         }
         

@@ -45,11 +45,6 @@ DiagFields(
 	fields = ['Ex','Rho_charges']
 )
 
-FieldFilter(
-    model = "Friedman",
-    theta = 0.3,
-)
-
 DiagScalar(
 	every = 1
 )

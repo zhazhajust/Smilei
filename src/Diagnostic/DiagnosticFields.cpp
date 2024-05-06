@@ -10,8 +10,13 @@ DiagnosticFields::DiagnosticFields( Params &params, SmileiMPI *smpi, VectorPatch
     Diagnostic( &oPMD, "DiagFields", ndiag )
 {
     //MESSAGE("Starting diag field creation " );
+    tmp_dset_ = NULL;
     diag_n = ndiag;
     
+    filespace_firstwrite = NULL;
+    memspace_firstwrite = NULL;
+    filespace_reread = NULL;
+    memspace_reread = NULL;
     filespace = NULL;
     memspace = NULL;
     
@@ -116,7 +121,7 @@ DiagnosticFields::DiagnosticFields( Params &params, SmileiMPI *smpi, VectorPatch
         unsigned int n;
         if( subgrids[isubgrid] == Py_None ) {
             subgrid_start_.push_back( 0 );
-            subgrid_stop_ .push_back( params.global_size_[isubgrid]+2 );
+            subgrid_stop_ .push_back( params.n_space_global[isubgrid]+2 );
             subgrid_step_ .push_back( 1 );
         } else if( PyTools::py2scalar( subgrids[isubgrid], n ) ) {
             subgrid_start_.push_back( n );
@@ -125,9 +130,9 @@ DiagnosticFields::DiagnosticFields( Params &params, SmileiMPI *smpi, VectorPatch
         } else if( PySlice_Check( subgrids[isubgrid] ) ) {
             Py_ssize_t start, stop, step, slicelength;
 #if PY_MAJOR_VERSION == 2
-            if( PySlice_GetIndicesEx( ( PySliceObject * )subgrids[isubgrid], params.global_size_[isubgrid]+1, &start, &stop, &step, &slicelength ) < 0 ) {
+            if( PySlice_GetIndicesEx( ( PySliceObject * )subgrids[isubgrid], params.n_space_global[isubgrid]+1, &start, &stop, &step, &slicelength ) < 0 ) {
 #else
-            if( PySlice_GetIndicesEx( subgrids[isubgrid], params.global_size_[isubgrid]+1, &start, &stop, &step, &slicelength ) < 0 ) {
+            if( PySlice_GetIndicesEx( subgrids[isubgrid], params.n_space_global[isubgrid]+1, &start, &stop, &step, &slicelength ) < 0 ) {
 #endif
                 PyTools::checkPyError();
                 ERROR( "Diagnostic Fields #"<<ndiag<<" `subgrid` axis #"<<isubgrid<<" not understood" );
@@ -156,7 +161,7 @@ DiagnosticFields::DiagnosticFields( Params &params, SmileiMPI *smpi, VectorPatch
             if( time_average > 1 ) {
                 for( unsigned int ifield=0; ifield<fields_names.size(); ifield++ )
                     vecPatches( ipatch )->EMfields->allFields_avg[diag_n].push_back(
-                        vecPatches( ipatch )->EMfields->createField( fields_names[ifield], params )
+                        vecPatches( ipatch )->EMfields->createField( fields_names[ifield],params )
                     );
             }
         }
@@ -173,17 +178,6 @@ DiagnosticFields::DiagnosticFields( Params &params, SmileiMPI *smpi, VectorPatch
     // Extract the flush time selection
     flush_timeSelection = new TimeSelection( PyTools::extract_py( "flush_every", "DiagFields", ndiag ), "DiagFields flush_every" );
     
-    // Extract the datatype
-    string datatype = "";
-    PyTools::extract( "datatype", datatype, "DiagFields", ndiag );
-    if( datatype == "double" ) {
-        file_datatype_ = H5T_NATIVE_DOUBLE;
-    } else if( datatype == "float" ) {
-        file_datatype_ = H5T_NATIVE_FLOAT;
-    } else {
-        ERROR( "Diagnostic Fields #"<<ndiag<<" has an unknown datatype `"<<datatype<<"`" );
-    }
-    
     // Copy the total number of patches
     tot_number_of_patches = params.tot_number_of_patches;
     
@@ -191,7 +185,7 @@ DiagnosticFields::DiagnosticFields( Params &params, SmileiMPI *smpi, VectorPatch
     field_type.resize( fields_names.size() );
     for( unsigned int ifield=0; ifield<fields_names.size(); ifield++ ) {
         string first_char = fields_names[ifield].substr( 0, 1 );
-        if( first_char == "E" || first_char == "A" ) {
+        if( first_char == "E" ) {
             field_type[ifield] = SMILEI_UNIT_EFIELD;
         } else if( first_char == "B" ) {
             field_type[ifield] = SMILEI_UNIT_BFIELD;
@@ -209,6 +203,18 @@ DiagnosticFields::DiagnosticFields( Params &params, SmileiMPI *smpi, VectorPatch
 DiagnosticFields::~DiagnosticFields()
 {
     closeFile();
+    if( filespace_firstwrite ) {
+        delete filespace_firstwrite;
+    }
+    if( memspace_firstwrite ) {
+        delete memspace_firstwrite;
+    }
+    if( filespace_reread ) {
+        delete filespace_reread;
+    }
+    if( memspace_reread ) {
+        delete memspace_reread;
+    }
     if( filespace ) {
         delete filespace;
     }
@@ -219,7 +225,7 @@ DiagnosticFields::~DiagnosticFields()
     delete flush_timeSelection;
 }
 
-void DiagnosticFields::openFile( Params &, SmileiMPI *smpi )
+void DiagnosticFields::openFile( Params &params, SmileiMPI *smpi )
 {
     if( file_ ) {
         return;
@@ -241,6 +247,11 @@ void DiagnosticFields::openFile( Params &, SmileiMPI *smpi )
 
 void DiagnosticFields::closeFile()
 {
+    
+    if( tmp_dset_ ) {
+        delete tmp_dset_;
+        tmp_dset_ = NULL;
+    }
     if( data_group_ ) {
         delete data_group_;
         data_group_ = NULL;
@@ -253,7 +264,7 @@ void DiagnosticFields::closeFile()
 
 
 
-void DiagnosticFields::init( Params &params, SmileiMPI *smpi, VectorPatch & )
+void DiagnosticFields::init( Params &params, SmileiMPI *smpi, VectorPatch &vecPatches )
 {
     // create the file
     openFile( params, smpi );
@@ -271,7 +282,7 @@ bool DiagnosticFields::prepare( int itime )
 }
 
 
-void DiagnosticFields::run( SmileiMPI *smpi, VectorPatch &vecPatches, int itime, SimWindow *simWindow, Timers & )
+void DiagnosticFields::run( SmileiMPI *smpi, VectorPatch &vecPatches, int itime, SimWindow *simWindow, Timers &timers )
 {
     // If time-averaging, increment the average
     if( time_average>1 ) {
@@ -299,6 +310,7 @@ void DiagnosticFields::run( SmileiMPI *smpi, VectorPatch &vecPatches, int itime,
         
         // Create group for this iteration
         ostringstream name_t;
+        name_t.str( "" );
         name_t << setfill( '0' ) << setw( 10 ) << itime;
         status = data_group_->has( name_t.str() );
         if( ! status ) {
@@ -331,7 +343,7 @@ void DiagnosticFields::run( SmileiMPI *smpi, VectorPatch &vecPatches, int itime,
         #pragma omp master
         {
             // Write
-            H5Write dset = writeField( iteration_group_, fields_names[ifield] );
+            H5Write dset = writeField( iteration_group_, fields_names[ifield], itime );
             // Attributes for openPMD
             openPMD_->writeFieldAttributes( dset, subgrid_start_, subgrid_step_ );
             openPMD_->writeRecordAttributes( dset, field_type[ifield] );
@@ -339,15 +351,19 @@ void DiagnosticFields::run( SmileiMPI *smpi, VectorPatch &vecPatches, int itime,
             openPMD_->writeComponentAttributes( dset, field_type[ifield] );
         }
         #pragma omp barrier 
+
     }
     
     #pragma omp master
     {
-        
         // write x_moved
         double x_moved = simWindow ? simWindow->getXmoved() : 0.;
         iteration_group_->attr( "x_moved", x_moved );
         delete iteration_group_;
+        if( tmp_dset_ ) {
+            delete tmp_dset_;
+        }
+        tmp_dset_ = NULL;
         if( flush_timeSelection->theTimeIsNow( itime ) ) {
             file_->flush();
         }
@@ -362,7 +378,7 @@ bool DiagnosticFields::needsRhoJs( int itime )
 }
 
 // SUPPOSED TO BE EXECUTED ONLY BY MASTER MPI
-uint64_t DiagnosticFields::getDiskFootPrint( int istart, int istop, Patch * )
+uint64_t DiagnosticFields::getDiskFootPrint( int istart, int istop, Patch *patch )
 {
     uint64_t footprint = 0;
     uint64_t nfields = fields_indexes.size();
@@ -380,7 +396,7 @@ uint64_t DiagnosticFields::getDiskFootPrint( int istart, int istop, Patch * )
     footprint += ndumps * nfields * 1200;
     
     // Add size of each field
-    footprint += ndumps * nfields * ( uint64_t )( total_dataset_size * (file_datatype_==H5T_NATIVE_DOUBLE?8:4) );
+    footprint += ndumps * nfields * ( uint64_t )( total_dataset_size * 8 );
     
     return footprint;
 }
@@ -429,22 +445,4 @@ void DiagnosticFields::findSubgridIntersection(
             }
         }
     }
-}
-
-void DiagnosticFields::findSubgridIntersection1(
-    hsize_t idim,
-    hsize_t &zone_offset,  // input = start of zone in full array / output = start of zone in the subgrid
-    hsize_t &zone_npoints, // input = npoints of the zone in full array / output = npoints zone in the subgrid
-    hsize_t &start_in_zone // output = start of subgrid in the zone
-)
-{
-    unsigned int istart_in_zone, istart_in_file, nsteps;
-    findSubgridIntersection(
-        subgrid_start_[idim], subgrid_stop_[idim], subgrid_step_[idim],
-        zone_offset, zone_offset + zone_npoints,
-        istart_in_zone, istart_in_file, nsteps
-    );
-    zone_offset = istart_in_file;
-    zone_npoints = nsteps;
-    start_in_zone = istart_in_zone;
 }

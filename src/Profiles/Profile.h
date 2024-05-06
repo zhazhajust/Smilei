@@ -87,12 +87,6 @@ public:
         return info.str();
     };
 
-    //! Get profile name
-    std::string getProfileName()
-    {
-        return profileName_;
-    }
-
 private:
     
     //! Name of the profile, in the case of a built-in profile

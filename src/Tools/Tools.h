@@ -33,10 +33,8 @@
 #include <mpi.h>
 
 #define ERROR_STYLE "\033[1;31m"
-#define CAREFUL_STYLE "\033[1;36m"
 #define FOOTER_STYLE "\033[0m"
 
-// Headers when OMP activated
 #ifdef _OMP
 #include <omp.h>
 
@@ -50,7 +48,6 @@
 std::cerr << ERROR_STYLE << line << "\n [" << __msg << "](" << omp_get_thread_num() \
 << ") " __FILE__ << ":" << __LINE__ << " (" << __FUNCTION__ << ") " << __txt << "\n" << line << FOOTER_STYLE << std::endl;}
 
-// Headers when OMP not activated
 #else
 #define __header(__msg,__txt) std::cout << "\t[" << __msg << "] " << __FILE__ << ":" << __LINE__ << " (" \
 << __FUNCTION__ << ") " << __txt << std::endl
@@ -63,10 +60,6 @@ std::cerr << ERROR_STYLE << line << "\n [" << __msg << "] " << __FILE__ << ":" <
 << __FUNCTION__ << ") " << __txt << "\n" << line << FOOTER_STYLE << std::endl;}
 
 #endif
-
-// Header for careful messages
-#define __header_careful(__txt) {  \
-std::cout << CAREFUL_STYLE << "CAREFUL: " << __txt << "\n" << FOOTER_STYLE << std::endl;}
 
 #define MESSAGE1(__txt)  {int __rk; MPI_Comm_rank( MPI_COMM_WORLD, &__rk ); if (__rk==0) { std::cout << " ";  std::cout << __txt << std::endl;};}
 #define MESSAGE2(__val,__txt) {int __rk; MPI_Comm_rank( MPI_COMM_WORLD, &__rk ); if (__rk==0) {for (int __i=0;__i<__val;__i++) std::cout << "\t";}; MESSAGE1(__txt);}
@@ -144,15 +137,6 @@ if (__i==__rk) {std::cout << "Proc [" << __i << "] " <<__txt << std::endl;} MPI_
     };                                      \
 }
 
-#define CAREFUL(__val, __txt) {      \
-    int __rk;                               \
-    MPI_Comm_rank( MPI_COMM_WORLD, &__rk ); \
-    if (__rk==0) {                          \
-        for (int __i=0;__i<__val;__i++) std::cout << "\t"; \
-        __header_careful(__txt);            \
-    };                                      \
-}
-
 
 class Tools
 {
@@ -177,20 +161,9 @@ public:
         tot << s1 << s2 << s3 << s4;
         return tot.str();
     }
-
-    //! Wrapper to get the thread number
-    static int getOMPThreadNum()
-    {
-#ifdef _OPENMP
-        return omp_get_thread_num();
-#else
-        return 0;
-#endif
-    }
-
 };
 
-#define LINK_NAMELIST "https://smileipic.github.io/Smilei/namelist.html"
+#define LINK_NAMELIST "https://smileipic.github.io/Smilei/namelist.html" 
 
 #if defined(WIN32) || defined(_WIN32)
 #define PATH_SEPARATOR "\\"
@@ -198,20 +171,5 @@ public:
 #define PATH_SEPARATOR "/"
 #endif
 
-//////////////////////////////////////
-/// @def SMILEI_UNUSED
-///
-/// Prevent a compiler warning for an unused variable.
-/// It is usefull when a lot of conditional compilation is used (#if XXX then compile code for ARM #else for x86 #endif).
-/// This has no performance overhead.
-///
-/// Example usage:
-///
-///     int a;
-///     SMILEI_UNUSED(a); // Without this macro, it would trigger a "variable unused" warning
-///     return;
-///
-//////////////////////////////////////
-#define SMILEI_UNUSED( an_arg ) static_cast<void>( an_arg )
 
 #endif

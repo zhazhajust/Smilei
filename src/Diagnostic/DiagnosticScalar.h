@@ -189,10 +189,10 @@ private :
     double dt;
     
     //! Number of cells in a patch (copied from params)
-    std::vector<unsigned int> patch_size_;
+    std::vector<unsigned int> n_space;
     
     //! Overall number of cells (copied from params)
-    std::vector<unsigned int> global_size_;
+    std::vector<unsigned int> n_space_global;
     
     //! output stream
     std::ofstream fout;

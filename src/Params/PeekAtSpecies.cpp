@@ -34,6 +34,7 @@ PeekAtSpecies::PeekAtSpecies( Params &p, unsigned int species_id ) :
             density_profile_ = new Profile( profile1, params->nDim_field, Tools::merge( density_profile_type, "_density ", species_name ), *params, true, true );
             PyTools::extract_pyProfile( "particles_per_cell", profile1, "Species", species_id );
             particles_per_cell_profile_ = new Profile( profile1, params->nDim_field, Tools::merge( "particles_per_cell ", species_name ), *params, true, true );
+            MESSAGE(particles_per_cell_profile_->getInfo());
         }
     }
     Py_DECREF( py_pos_init );
@@ -69,9 +70,6 @@ double PeekAtSpecies::numberOfParticlesInPatch( unsigned int hindex )
         if( n_part_in_cell<=0. || dens( 0, 0, 0 )==0. ) {
             n_part_in_cell = 0.;
         }
-        for( unsigned int i=0 ; i<params->nDim_field ; i++ ) {
-            delete x_cell[i] ;
-        }
         return n_part_in_cell * params->n_cell_per_patch;
     } else {
         return 0. ;  //Do not account for particles initialized from numpy array
@@ -96,9 +94,6 @@ double PeekAtSpecies::numberOfParticlesInPatch( vector<double> x )
         double n_part_in_cell = floor( nppc( 0, 0, 0 ) );
         if( n_part_in_cell<=0. || dens( 0, 0, 0 )==0. ) {
             n_part_in_cell = 0.;
-        }
-        for( unsigned int i=0 ; i<params->nDim_field ; i++ ) {
-            delete x_cell[i] ;
         }
         return n_part_in_cell * params->n_cell_per_patch;
     } else {
@@ -143,9 +138,6 @@ double PeekAtSpecies::totalNumberofParticles()
                     (*x_cell[idim])(0) = params->patch_dimensions[idim] * 0.5;
                 }
             }
-        }
-        for( unsigned int i=0 ; i<params->nDim_field ; i++ ) {
-            delete x_cell[i] ;
         }
         
         return npart_total;

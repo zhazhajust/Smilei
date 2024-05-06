@@ -359,8 +359,8 @@ public:
     // extract a vector of profiles
     static bool extract_pyProfiles( std::string name, std::string component, int nComponent, std::vector<PyObject *>&prof );
 
-    // extract a vector of 1 or N profiles
-    static bool extract_1orNProfiles( unsigned int numberOfProfiles, std::string name, std::string component, int nComponent, std::vector<PyObject *>&prof );
+    // extract a vector of 1 or 3 profiles
+    static bool extract_1or3Profiles( std::string name, std::string component, int nComponent, std::vector<PyObject *>&prof );
 
     // extract 2 profiles from namelist (used for laser profile)
     static bool extract2Profiles( std::string varname, int ilaser, std::vector<PyObject *> &profiles );
@@ -461,11 +461,7 @@ public:
         }
         PyObject *inspect = PyImport_ImportModule( "inspect" );
         checkPyError();
-#if PY_MAJOR_VERSION < 3
         PyObject *tuple = PyObject_CallMethod( inspect, const_cast<char *>( "getargspec" ), const_cast<char *>( "(O)" ), obj );
-#else
-        PyObject *tuple = PyObject_CallMethod( inspect, const_cast<char *>( "getfullargspec" ), const_cast<char *>( "(O)" ), obj );
-#endif
         PyObject *arglist = PyTuple_GetItem( tuple, 0 ); // list of function arguments
         PyObject *vararg = PyTuple_GetItem( tuple, 1 ); // name of *args
         int nargs = PyObject_Size( arglist );

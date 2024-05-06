@@ -24,29 +24,65 @@ using namespace std;
 // ---------------------------------------------------------------------------------------------------------------------
 // Constructor for the virtual class ElectroMagn
 // ---------------------------------------------------------------------------------------------------------------------
-ElectroMagn::ElectroMagn( Params &params, vector<Species *> &vecSpecies, Patch *patch ) :
+ElectroMagn::ElectroMagn( Params &params, DomainDecomposition *domain_decomposition, vector<Species *> &vecSpecies, Patch *patch ) :
     timestep( params.timestep ),
     cell_length( params.cell_length ),
     n_species( vecSpecies.size() ),
     nDim_field( params.nDim_field ),
     cell_volume( params.cell_volume ),
+    oversize( params.oversize ),
     isXmin( patch->isXmin() ),
     isXmax( patch->isXmax() ),
     is_pxr( params.is_pxr ),
     nrj_mw_out( 0. ),
-    nrj_mw_inj( 0. ),
-    filter_( NULL ),
-    use_BTIS3(params.use_BTIS3)
+    nrj_mw_inj( 0. )
 {
-    size_ = patch->size_;
-    oversize = patch->oversize;
-    // Dimension of the primal and dual grids
-    dimPrim.resize( nDim_field );
-    dimDual.resize( nDim_field );
-    for( unsigned int i=0 ; i < nDim_field ; i++ ) {
-        dimPrim[i] = size_[i] + 2*oversize[i] + 1;
-        dimDual[i] = size_[i] + 2*oversize[i] + 2 - (params.is_pxr);
+    n_space.resize( params.n_space.size() );
+    // Test if the patch is a small patch (Hilbert or Linearized are for VectorPatch)
+    if( ( dynamic_cast<HilbertDomainDecomposition *>( domain_decomposition ) )
+        || ( dynamic_cast<LinearizedDomainDecomposition *>( domain_decomposition ) ) ) {
+        n_space = params.n_space;
     }
+    else if ( dynamic_cast<RegionDomainDecomposition*>( domain_decomposition ) ) {
+        for ( unsigned int i = 0 ; i < nDim_field ; i++ ) {
+            n_space[i] = params.n_space_region[i];
+            oversize[i] = params.region_oversize[i];
+        }
+    }
+    else { //NULL (Global domain)
+        n_space = params.n_space_global;
+        for ( unsigned int i = 0 ; i < nDim_field ; i++ )
+            oversize[i] = params.region_oversize[i];
+    }
+
+    if( dynamic_cast<PatchAM *>( patch ) ) {
+        PatchAM *patchAM = static_cast<PatchAM *>( patch );
+        int j_glob_ = patchAM->Pcoordinates[1]*n_space[1]-oversize[1]; //cell_starting_global_index is only define later during patch creation.
+        int nr_p = n_space[1]+1+2*oversize[1];
+        double dr = params.cell_length[1];
+        patchAM->invR.resize( nr_p );
+
+        if( !params.is_spectral ){
+            patchAM->invRd.resize( nr_p+1 );
+            for( int j = 0; j< nr_p; j++ ) {
+                if( j_glob_ + j == 0 ) {
+                    patchAM->invR[j] = 8./dr; // No Verboncoeur correction
+                    //invR[j] = 64./(13.*dr); // Order 2 Verboncoeur correction
+                } else {
+                    patchAM->invR[j] = 1./abs(((double)j_glob_ + (double)j)*dr);
+                }
+            }
+            for( int j = 0; j< nr_p + 1; j++ ) {
+                patchAM->invRd[j] = 1./abs(((double)j_glob_ + (double)j - 0.5)*dr);
+            }
+        } else { // if spectral, primal grid shifted by half cell length
+            for( int j = 0; j< nr_p; j++ ) {
+                //patchAM->invR[j] = 1./( ((double)j + 0.5)*dr);
+                patchAM->invR[j] = 1./abs(((double)j_glob_ + (double)j+ 0.5)*dr);
+            }
+        }
+    }
+
     
     // take useful things from params
     initElectroMagnQuantities();
@@ -67,19 +103,44 @@ ElectroMagn::ElectroMagn( ElectroMagn *emFields, Params &params, Patch *patch ) 
     n_species( emFields->n_species ),
     nDim_field( emFields->nDim_field ),
     cell_volume( emFields->cell_volume ),
-    size_( emFields->size_ ),
+    n_space( emFields->n_space ),
     oversize( emFields->oversize ),
     isXmin( patch->isXmin() ),
     isXmax( patch->isXmax() ),
     is_pxr( emFields->is_pxr ),
     nrj_mw_out( 0. ),
-    nrj_mw_inj( 0. ),
-    filter_( NULL ),
-    use_BTIS3(emFields->use_BTIS3)
+    nrj_mw_inj( 0. )
 {
-    dimPrim = emFields->dimPrim;
-    dimDual = emFields->dimDual;
-    
+
+    if ( dynamic_cast<PatchAM *>( patch ) ) {
+        PatchAM *patchAM = static_cast<PatchAM *>( patch );
+        int j_glob_ = patchAM->Pcoordinates[1]*n_space[1]-oversize[1]; //cell_starting_global_index is only define later during patch creation.
+        int nr_p = n_space[1]+1+2*oversize[1];
+        double dr = params.cell_length[1];
+        patchAM->invR.resize( nr_p );
+
+        if( !params.is_spectral ) {
+            patchAM->invRd.resize( nr_p+1 );
+            for( int j = 0; j< nr_p; j++ ) {
+                if( j_glob_ + j == 0 ) {
+                    patchAM->invR[j] = 8./dr; // No Verboncoeur correction
+                    //invR[j] = 64./(13.*dr); // Order 2 Verboncoeur correction
+                } else {
+                    patchAM->invR[j] = 1./abs(((double)j_glob_ + (double)j)*dr);
+                }
+            }
+            for( int j = 0; j< nr_p + 1; j++ ) {
+                patchAM->invRd[j] = 1./abs(((double)j_glob_ + (double)j - 0.5)*dr);
+            }
+        } else { // if spectral, primal grid shifted by half cell length
+            for( int j = 0; j< nr_p; j++ ) {
+                //patchAM->invR[j] = 1./( ((double)j + 0.5)*dr);
+                patchAM->invR[j] = 1./abs(((double)j_glob_ + (double)j+ 0.5)*dr);
+            }
+        }
+    }
+
+
     initElectroMagnQuantities();
     
     emBoundCond = ElectroMagnBC_Factory::create( params, patch );
@@ -101,6 +162,10 @@ void ElectroMagn::initElectroMagnQuantities()
     poynting_inst[0].resize( nDim_field, 0.0 );
     poynting_inst[1].resize( nDim_field, 0.0 );
     
+    // if( n_space.size() != 3 ) {
+    //     ERROR( "this should not happen" );
+    // }
+    
     Ex_=NULL;
     Ey_=NULL;
     Ez_=NULL;
@@ -110,8 +175,6 @@ void ElectroMagn::initElectroMagnQuantities()
     Bx_m=NULL;
     By_m=NULL;
     Bz_m=NULL;
-    By_mBTIS3=NULL;
-    Bz_mBTIS3=NULL;
     Jx_=NULL;
     Jy_=NULL;
     Jz_=NULL;
@@ -146,7 +209,7 @@ void ElectroMagn::initElectroMagnQuantities()
 }
 
 
-void ElectroMagn::finishInitialization( int nspecies, Patch * )
+void ElectroMagn::finishInitialization( int nspecies, Patch *patch )
 {
 
     // Fill allfields
@@ -168,10 +231,6 @@ void ElectroMagn::finishInitialization( int nspecies, Patch * )
         allFields.push_back( Env_Chi_ );
         allFields.push_back( Env_E_abs_ );
         allFields.push_back( Env_Ex_abs_ );
-    }
-    if ( By_mBTIS3 != NULL ){
-        allFields.push_back( By_mBTIS3 );
-        allFields.push_back( Bz_mBTIS3 );
     }
     
     // For species-related fields
@@ -275,8 +334,23 @@ ElectroMagn::~ElectroMagn()
         }
     }
     
-    if( filter_ ) {
-        delete filter_;
+    for( unsigned int i=0; i<Exfilter.size(); i++ ) {
+        delete Exfilter[i];
+    }
+    for( unsigned int i=0; i<Eyfilter.size(); i++ ) {
+        delete Eyfilter[i];
+    }
+    for( unsigned int i=0; i<Ezfilter.size(); i++ ) {
+        delete Ezfilter[i];
+    }
+    for( unsigned int i=0; i<Bxfilter.size(); i++ ) {
+        delete Bxfilter[i];
+    }
+    for( unsigned int i=0; i<Byfilter.size(); i++ ) {
+        delete Byfilter[i];
+    }
+    for( unsigned int i=0; i<Bzfilter.size(); i++ ) {
+        delete Bzfilter[i];
     }
     
     int nBC = emBoundCond.size();
@@ -296,16 +370,6 @@ ElectroMagn::~ElectroMagn()
     for( vector<Antenna>::iterator antenna=antennas.begin(); antenna!=antennas.end(); antenna++ ) {
         delete antenna->field;
         antenna->field=NULL;
-    }
-    
-    if (use_BTIS3){
-        if(By_mBTIS3 != NULL){
-            delete By_mBTIS3;
-        }
-    
-        if(Bz_mBTIS3 != NULL){
-            delete Bz_mBTIS3;
-        }
     }
 
 //     for ( unsigned int iExt = 0 ; iExt < prescribedFields.size() ; iExt++ ) {
@@ -335,7 +399,7 @@ void ElectroMagn::updateGridSize( Params &params, Patch *patch )
     unsigned int i=0;
     {
         for( int isDual=0 ; isDual<2 ; isDual++ ) {
-            bufsize[i][isDual] = size_[i] + 1;
+            bufsize[i][isDual] = n_space[i] + 1;
         }
         
         for( int isDual=0 ; isDual<2 ; isDual++ ) {
@@ -368,7 +432,7 @@ void ElectroMagn::updateGridSize( Params &params, Patch *patch )
 
 
 
-void ElectroMagn::boundaryConditions( double time_dual, Patch *patch, SimWindow *simWindow )
+void ElectroMagn::boundaryConditions( int itime, double time_dual, Patch *patch, Params &params, SimWindow *simWindow )
 {
     // Compute EM Bcs
     if( !( simWindow && simWindow->isMoving( time_dual ) ) ) { //Boundary conditions are applied after moving the window.
@@ -451,7 +515,7 @@ void ElectroMagn::restartEnvChis()
 // ---------------------------------------------------------------------------------------------------------------------
 void ElectroMagn::incrementAvgField( Field *field, Field *field_avg )
 {
-    for( unsigned int i=0; i<field->number_of_points_; i++ ) {
+    for( unsigned int i=0; i<field->globalDims_; i++ ) {
         ( *field_avg )( i ) += ( *field )( i );
     }
 }//END incrementAvgField
@@ -484,25 +548,14 @@ double ElectroMagn::computeEnergy()
 
 void ElectroMagn::applyExternalFields( Patch *patch )
 {
-    std::vector<bool> input, copy;
-    input = {false, false, false};
-    copy = {true, true, true};
     for( vector<ExtField>::iterator extfield=extFields.begin(); extfield!=extFields.end(); extfield++ ) {
         if( extfield->index < allFields.size() ) {
             applyExternalField( allFields[extfield->index], extfield->profile, patch );
         }
-        string name = LowerCase( extfield->field );
-        if( name==LowerCase( Bx_->name ) ) input[0] = true; 
-        if( name==LowerCase( By_->name ) ) input[1] = true; 
-        if( name==LowerCase( Bz_->name ) ) input[2] = true; 
-        if( name==LowerCase( Bx_m->name ) ) copy[0] = false; 
-        if( name==LowerCase( By_m->name ) ) copy[1] = false; 
-        if( name==LowerCase( Bz_m->name ) ) copy[2] = false; 
     }
-    // These should be additions and not copies. In case B is given but not B_m, B is assumed constant over time and B_m=B.
-    if (input[0] && copy[0]) Bx_m->copyFrom( Bx_ );
-    if (input[1] && copy[1]) By_m->copyFrom( By_ );
-    if (input[2] && copy[2]) Bz_m->copyFrom( Bz_ );
+    Bx_m->copyFrom( Bx_ );
+    By_m->copyFrom( By_ );
+    Bz_m->copyFrom( Bz_ );
 }
 
 void ElectroMagn::saveExternalFields( Patch *patch )
@@ -549,7 +602,7 @@ void ElectroMagn::applyAntenna( unsigned int iAntenna, double intensity )
     
         field = allFields[antennas[iAntenna].index];
         
-        for( unsigned int i=0; i< field->number_of_points_ ; i++ ) {
+        for( unsigned int i=0; i< field->globalDims_ ; i++ ) {
             ( *field )( i ) += intensity * ( *antennaField )( i );
         }
         

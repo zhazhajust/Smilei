@@ -1,11 +1,3 @@
-// -----------------------------------------------------------------------------
-//
-//! \file Particles.cpp
-//
-//! \brief contains the Particles class methods
-//
-// -----------------------------------------------------------------------------
-
 #include "Particles.h"
 
 #include <cstring>
@@ -16,12 +8,6 @@
 #include "Species.h"
 
 #include "Particle.h"
-
-#include <algorithm>
-#include <iostream>
-#include <vector>
-#include <iterator>
-#include <numeric>
 
 using namespace std;
 
@@ -38,11 +24,9 @@ Particles::Particles():
     Momentum.resize( 0 );
     cell_keys.resize( 0 );
     is_test = false;
-    has_quantum_parameter = false;
-    has_Monte_Carlo_process = false;
-    
-    interpolated_fields_ = nullptr;
-    
+    isQuantumParameter = false;
+    isMonteCarlo = false;
+
     double_prop_.resize( 0 );
     short_prop_.resize( 0 );
     uint64_prop_.resize( 0 );
@@ -52,11 +36,6 @@ Particles::~Particles()
 {
     clear();
     shrinkToFit();
-    
-    if( interpolated_fields_ ) {
-        delete interpolated_fields_;
-        interpolated_fields_ = nullptr;
-    }
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -67,13 +46,13 @@ void Particles::initialize( unsigned int nParticles, unsigned int nDim, bool kee
     //if (nParticles > Weight.capacity()) {
     //    WARNING("You should increase c_part_max in specie namelist");
     //}
-    // if( size()==0 ) {
-    //     float c_part_max =1.2;
+    if( Weight.size()==0 ) {
+        float c_part_max =1.2;
         //float c_part_max = part.c_part_max;
         //float c_part_max = params.species_param[0].c_part_max;
-        //reserve( round( c_part_max * nParticles ), nDim );
-    //}
-    
+        reserve( round( c_part_max * nParticles ), nDim );
+    }
+
     resize( nParticles, nDim, keep_position_old );
     //cell_keys.resize( nParticles );
 
@@ -105,25 +84,28 @@ void Particles::initialize( unsigned int nParticles, unsigned int nDim, bool kee
         // Quantum parameter (for QED effects):
         // - if radiation reaction (continuous or discontinuous)
         // - if multiphoton-Breit-Wheeler if photons
-        if( has_quantum_parameter ) {
+        if( isQuantumParameter ) {
             double_prop_.push_back( &Chi );
         }
 
         // Optical Depth for Monte-Carlo processes:
         // - if the discontinuous (Monte-Carlo) radiation reaction
         // are activated, tau is the incremental optical depth to emission
-        if( has_Monte_Carlo_process ) {
+        if( isMonteCarlo ) {
             double_prop_.push_back( &Tau );
         }
-        
-        if( interpolated_fields_ ) {
-            for( size_t i = 0; i < interpolated_fields_->mode_.size(); i++ ) {
-                if( interpolated_fields_->mode_[i] > 0 ) {
-                    double_prop_.push_back( &(interpolated_fields_->F_[i]) );
-                }
-            }
-        }
+
     }
+
+    // Position quick pointers
+    position_x = &Position[0][0];
+    position_y = &Position[1][0];
+    position_z = &Position[2][0];
+
+    // Momentum quick pointers
+    momentum_x = &Momentum[0][0];
+    momentum_y = &Momentum[1][0];
+    momentum_z = &Momentum[2][0];
 
 }
 
@@ -132,96 +114,66 @@ void Particles::initialize( unsigned int nParticles, unsigned int nDim, bool kee
 // ---------------------------------------------------------------------------------------------------------------------
 void Particles::initialize( unsigned int nParticles, Particles &part )
 {
-    is_test = part.is_test;
+    is_test=part.is_test;
 
-    tracked = part.tracked;
+    tracked=part.tracked;
 
-    has_quantum_parameter = part.has_quantum_parameter;
+    isQuantumParameter=part.isQuantumParameter;
 
-    has_Monte_Carlo_process = part.has_Monte_Carlo_process;
-    
-    if( part.interpolated_fields_ && ! interpolated_fields_ ) {
-        interpolated_fields_ = new InterpolatedFields();
-        interpolated_fields_->mode_ = part.interpolated_fields_->mode_;
-    }
-    
+    isMonteCarlo=part.isMonteCarlo;
+
     initialize( nParticles, part.Position.size(), part.Position_old.size() > 0 );
 }
 
 
 
 // ---------------------------------------------------------------------------------------------------------------------
-//! Set capacity of Particles vectors
+// Set capacity of Particles vectors
 // ---------------------------------------------------------------------------------------------------------------------
-void Particles::reserve( unsigned int reserved_particles,
-                         unsigned int nDim,
-                         bool         keep_position_old )
+void Particles::reserve( unsigned int n_part_max, unsigned int nDim )
 {
+    return;
+
     Position.resize( nDim );
-
-    for( unsigned int i = 0; i < nDim; i++ ) {
-        Position[i].reserve( reserved_particles );
+    Position_old.resize( nDim );
+    for( unsigned int i=0 ; i< nDim ; i++ ) {
+        Position[i].reserve( n_part_max );
+        Position_old[i].reserve( n_part_max );
     }
-
-    if( keep_position_old ) {
-        Position_old.resize( nDim );
-
-        for( unsigned int i = 0; i < nDim; i++ ) {
-            Position_old[i].reserve( reserved_particles );
-        }
+    Momentum.resize( 3 );
+    for( unsigned int i=0 ; i< 3 ; i++ ) {
+        Momentum[i].reserve( n_part_max );
     }
-
-    //Momentum.resize( 3 );
-    for( unsigned int i = 0; i < 3; i++ ) {
-        Momentum[i].reserve( reserved_particles );
-    }
-
-    Weight.reserve( reserved_particles );
-    Charge.reserve( reserved_particles );
+    Weight.reserve( n_part_max );
+    Charge.reserve( n_part_max );
 
     if( tracked ) {
-        Id.reserve( reserved_particles );
+        Id.reserve( n_part_max );
     }
 
-    if( has_quantum_parameter ) {
-        Chi.reserve( reserved_particles );
+    if( isQuantumParameter ) {
+        Chi.reserve( n_part_max );
     }
 
-    if( has_Monte_Carlo_process ) {
-        Tau.reserve( reserved_particles );
+    if( isMonteCarlo ) {
+        Tau.reserve( n_part_max );
     }
 
-    cell_keys.reserve( reserved_particles );
-    
-    if( interpolated_fields_ ) {
-        for( size_t i = 0; i < interpolated_fields_->mode_.size(); i++ ) {
-            if( interpolated_fields_->mode_[i] > 0 ) {
-                interpolated_fields_->F_[i].reserve( reserved_particles );
-            }
-        }
-    }
+    cell_keys.reserve( n_part_max );
+
 }
 
-// ---------------------------------------------------------------------------------------------------------------------
-//! Set capacity of Particles vectors and keep dimensionality
-// ---------------------------------------------------------------------------------------------------------------------
-void Particles::reserve( unsigned int reserved_particles )
-{
-    reserve( reserved_particles, Position.size(), Position_old.size() > 0 );
-}
-
-// ---------------------------------------------------------------------------------------------------------------------
-//! Initialize like Particles object part with 0 particles and reserve space for n_part_max particles
-//
 void Particles::initializeReserve( unsigned int npart_max, Particles &part )
 {
     initialize( 0, part );
     reserve( npart_max, part.dimension() );
 }
 
+
+
 // ---------------------------------------------------------------------------------------------------------------------
-//! Resize Particle vectors and change dimensionality according to nDim
-//
+//Resize Particle vectors
+// ---------------------------------------------------------------------------------------------------------------------
 void Particles::resize( unsigned int nParticles, unsigned int nDim, bool keep_position_old )
 {
     Position.resize( nDim );
@@ -248,24 +200,16 @@ void Particles::resize( unsigned int nParticles, unsigned int nDim, bool keep_po
         Id.resize( nParticles, 0 );
     }
 
-    if( has_quantum_parameter ) {
+    if( isQuantumParameter ) {
         Chi.resize( nParticles, 0. );
     }
 
-    if( has_Monte_Carlo_process ) {
+    if( isMonteCarlo ) {
         Tau.resize( nParticles, 0. );
     }
 
     cell_keys.resize( nParticles, 0. );
 
-    if( interpolated_fields_ ) {
-        interpolated_fields_->F_.resize( interpolated_fields_->mode_.size() );
-        for( size_t i = 0; i < interpolated_fields_->mode_.size(); i++ ) {
-            if( interpolated_fields_->mode_[i] > 0 ) {
-                interpolated_fields_->F_[i].resize( nParticles, 0. );
-            }
-        }
-    }
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -291,7 +235,7 @@ void Particles::resize( unsigned int nParticles)
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
-//! Resize the cell_keys vector only
+//! Resize the cell_keys vector
 // ---------------------------------------------------------------------------------------------------------------------
 void Particles::resizeCellKeys(unsigned int nParticles)
 {
@@ -299,11 +243,12 @@ void Particles::resizeCellKeys(unsigned int nParticles)
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
-//! Remove extra capacity of Particles vectors
-//! params [in] compute_cell_keys: if true, cell_keys is affected (default is false)
+// Remove extra capacity of Particles vectors
+// Cell keys not affected
 // ---------------------------------------------------------------------------------------------------------------------
-void Particles::shrinkToFit(const bool compute_cell_keys)
+void Particles::shrinkToFit()
 {
+
     for( unsigned int iprop=0 ; iprop<double_prop_.size() ; iprop++ ) {
         std::vector<double>( *double_prop_[iprop] ).swap( *double_prop_[iprop] );
     }
@@ -316,17 +261,16 @@ void Particles::shrinkToFit(const bool compute_cell_keys)
         std::vector<uint64_t>( *uint64_prop_[iprop] ).swap( *uint64_prop_[iprop] );
     }
 
-    if (compute_cell_keys) {
-        cell_keys.swap(cell_keys);
-    }
+    //cell_keys.swap(cell_keys);
+
 }
 
 
 // ---------------------------------------------------------------------------------------------------------------------
-//! Reset of Particles vectors
-//! params [in] compute_cell_keys: if true, cell_keys is affected (default is false)
+// Reset of Particles vectors
+// Cell keys not affected
 // ---------------------------------------------------------------------------------------------------------------------
-void Particles::clear(const bool compute_cell_keys)
+void Particles::clear()
 {
     for( unsigned int iprop=0 ; iprop<double_prop_.size() ; iprop++ ) {
         double_prop_[iprop]->clear();
@@ -340,9 +284,7 @@ void Particles::clear(const bool compute_cell_keys)
         uint64_prop_[iprop]->clear();
     }
 
-    if (compute_cell_keys) {
-        cell_keys.clear();
-    }
+    //cell_keys.clear();
 
 }
 
@@ -449,20 +391,12 @@ void Particles::makeParticleAt( Particles &source_particles, unsigned int ipart,
         Id.push_back( 0 );
     }
 
-    if( has_quantum_parameter ) {
+    if( isQuantumParameter ) {
         Chi.push_back( 0. );
     }
 
-    if( has_Monte_Carlo_process ) {
+    if( isMonteCarlo ) {
         Tau.push_back( 0. );
-    }
-    
-    if( interpolated_fields_ ) {
-        for( size_t i = 0; i < interpolated_fields_->mode_.size(); i++ ) {
-            if( interpolated_fields_->mode_[i] > 0 ) {
-                interpolated_fields_->F_[i].push_back( 0. );
-            }
-        }
     }
 }
 
@@ -471,7 +405,7 @@ void Particles::makeParticleAt( Particles &source_particles, unsigned int ipart,
 //! Suppress particle iPart
 //! cell keys not affected
 // ---------------------------------------------------------------------------------------------------------------------
-void Particles::eraseParticle( unsigned int ipart, bool compute_cell_keys )
+void Particles::eraseParticle( unsigned int ipart )
 {
     for( unsigned int iprop=0 ; iprop<double_prop_.size() ; iprop++ ) {
         ( *double_prop_[iprop] ).erase( ( *double_prop_[iprop] ).begin()+ipart );
@@ -485,9 +419,7 @@ void Particles::eraseParticle( unsigned int ipart, bool compute_cell_keys )
         ( *uint64_prop_[iprop] ).erase( ( *uint64_prop_[iprop] ).begin()+ipart );
     }
 
-    if (compute_cell_keys) {
-        cell_keys.erase(cell_keys.begin() + ipart);
-    }
+    //cell_keys.erase(cell_keys.begin() + ipart);
 
 }
 
@@ -495,7 +427,7 @@ void Particles::eraseParticle( unsigned int ipart, bool compute_cell_keys )
 //! Suppress all particles from iPart to the end of particle array
 //! cell keys not affected
 // ---------------------------------------------------------------------------------------------------------------------
-void Particles::eraseParticleTrail( unsigned int ipart, bool compute_cell_keys )
+void Particles::eraseParticleTrail( unsigned int ipart )
 {
     for( unsigned int iprop=0 ; iprop<double_prop_.size() ; iprop++ ) {
         ( *double_prop_[iprop] ).erase( ( *double_prop_[iprop] ).begin()+ipart, ( *double_prop_[iprop] ).end() );
@@ -509,16 +441,12 @@ void Particles::eraseParticleTrail( unsigned int ipart, bool compute_cell_keys )
         ( *uint64_prop_[iprop] ).erase( ( *uint64_prop_[iprop] ).begin()+ipart, ( *uint64_prop_[iprop] ).end() );
     }
 
-    if (compute_cell_keys) {
-        cell_keys.erase( cell_keys.begin()+ipart, cell_keys.end() );
-    }
-
 }
 // ---------------------------------------------------------------------------------------------------------------------
 //! Suppress npart particles from ipart
 //! cell keys not affected
 // ---------------------------------------------------------------------------------------------------------------------
-void Particles::eraseParticle( unsigned int ipart, unsigned int npart, bool compute_cell_keys )
+void Particles::eraseParticle( unsigned int ipart, unsigned int npart )
 {
     for( unsigned int iprop=0 ; iprop<double_prop_.size() ; iprop++ ) {
         ( *double_prop_[iprop] ).erase( ( *double_prop_[iprop] ).begin()+ipart, ( *double_prop_[iprop] ).begin()+ipart+npart );
@@ -530,10 +458,6 @@ void Particles::eraseParticle( unsigned int ipart, unsigned int npart, bool comp
 
     for( unsigned int iprop=0 ; iprop<uint64_prop_.size() ; iprop++ ) {
         ( *uint64_prop_[iprop] ).erase( ( *uint64_prop_[iprop] ).begin()+ipart, ( *uint64_prop_[iprop] ).begin()+ipart+npart );
-    }
-
-    if (compute_cell_keys) {
-        cell_keys.erase( cell_keys.begin()+ipart, cell_keys.begin()+ipart+npart );
     }
 
 }
@@ -557,11 +481,11 @@ void Particles::print( unsigned int iPart )
         cout << Id[iPart] << endl;
     }
 
-    if( has_quantum_parameter ) {
+    if( isQuantumParameter ) {
         cout << Chi[iPart] << endl;
     }
 
-    if( has_Monte_Carlo_process ) {
+    if( isMonteCarlo ) {
         cout << Tau[iPart] << endl;
     }
 }
@@ -588,11 +512,11 @@ ostream &operator << ( ostream &out, const Particles &particles )
             out << particles.Id[iPart] << endl;
         }
 
-        if( particles.has_quantum_parameter ) {
+        if( particles.isQuantumParameter ) {
             out << particles.Chi[iPart] << endl;
         }
 
-        if( particles.has_Monte_Carlo_process ) {
+        if( particles.isMonteCarlo ) {
             out << particles.Tau[iPart] << endl;
         }
     }
@@ -707,10 +631,9 @@ void Particles::translateParticles( std::vector<unsigned int> parts )
 
 
 // ---------------------------------------------------------------------------------------------------------------------
-//! Move particle src_particle into dest_particle memory location, erasing dest_particle.
-//! Warning: do not update first_index and last_index
+// Move particle src_particle into dest_particle memory location, erasing dest_particle.
 // ---------------------------------------------------------------------------------------------------------------------
-void Particles::overwriteParticle( unsigned int src_particle, unsigned int dest_particle, bool compute_cell_keys )
+void Particles::overwriteParticle( unsigned int src_particle, unsigned int dest_particle )
 {
     for( unsigned int iprop=0 ; iprop<double_prop_.size() ; iprop++ ) {
         ( *double_prop_[iprop] )[dest_particle] = ( *double_prop_[iprop] )[src_particle];
@@ -723,21 +646,13 @@ void Particles::overwriteParticle( unsigned int src_particle, unsigned int dest_
     for( unsigned int iprop=0 ; iprop<uint64_prop_.size() ; iprop++ ) {
         ( *uint64_prop_[iprop] )[dest_particle] = ( *uint64_prop_[iprop] )[src_particle];
     }
-
-    if (compute_cell_keys) {
-        cell_keys[dest_particle] = cell_keys[src_particle];
-    }
 }
 
 
 // ---------------------------------------------------------------------------------------------------------------------
-//! Move particle part1->part1+N into part2->part2+N memory location erasing part2->part2+N.
-//! Warning: do not update first_index and last_index
+// Move particle part1->part1+N into part2->part2+N memory location erasing part2->part2+N.
 // ---------------------------------------------------------------------------------------------------------------------
-void Particles::overwriteParticle( unsigned int part1,
-                                   unsigned int part2,
-                                   unsigned int N,
-                                   bool compute_cell_keys)
+void Particles::overwriteParticle( unsigned int part1, unsigned int part2, unsigned int N )
 {
     unsigned int sizepart = N*sizeof( Position[0][0] );
     unsigned int sizecharge = N*sizeof( Charge[0] );
@@ -745,7 +660,6 @@ void Particles::overwriteParticle( unsigned int part1,
 
     for( unsigned int iprop=0 ; iprop<double_prop_.size() ; iprop++ ) {
         memcpy( & ( *double_prop_[iprop] )[part2],  &( *double_prop_[iprop] )[part1], sizepart );
-        // std::copy( *double_prop_[iprop]->begin()+part1,  *double_prop_[iprop]->begin() + part1 + N, *double_prop_[iprop]->begin() + part2 );
     }
 
     for( unsigned int iprop=0 ; iprop<short_prop_.size() ; iprop++ ) {
@@ -755,16 +669,10 @@ void Particles::overwriteParticle( unsigned int part1,
     for( unsigned int iprop=0 ; iprop<uint64_prop_.size() ; iprop++ ) {
         memcpy( & ( *uint64_prop_[iprop] )[part2],  &( *uint64_prop_[iprop] )[part1], sizeid );
     }
-
-    if (compute_cell_keys) {
-        //std::copy( cell_keys.begin()+part1,  cell_keys.begin() + part1 + N, cell_keys.begin() + part2 );
-        memcpy( &cell_keys[part2],  &cell_keys[part1], N*sizeof( cell_keys[0] ) );
-    }
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
-//! Move particle part1 into part2 memory location of dest vector, erasing part2.
-//! Warning: do not update first_index and last_index
+// Move particle part1 into part2 memory location of dest vector, erasing part2.
 // ---------------------------------------------------------------------------------------------------------------------
 void Particles::overwriteParticle( unsigned int part1, Particles &dest_parts, unsigned int part2 )
 {
@@ -836,6 +744,13 @@ void Particles::swapParticle( unsigned int part1, unsigned int part2, unsigned i
 
 }
 
+// ---------------------------------------------------------------------------------------------------------------------
+// Move iPart at the end of vectors (to do for MPI)
+// ---------------------------------------------------------------------------------------------------------------------
+void Particles::pushToEnd( unsigned int iPart )
+{
+
+}
 
 // ---------------------------------------------------------------------------------------------------------------------
 // Create a new particle at the end of vectors
@@ -996,115 +911,6 @@ void Particles::eraseParticlesWithMask( int istart, int iend) {
 // }
 
 // ---------------------------------------------------------------------------------------------------------------------
-//! This method eliminates the space between the bins
-//! (presence of empty particles between the bins)
-// ---------------------------------------------------------------------------------------------------------------------
-void Particles::compress(bool compute_cell_keys) {
-
-    unsigned int nbin = numberOfBins();
-
-    for( unsigned int ibin = 0 ; ibin < nbin-1 ; ibin++ ) {
-
-        // Removal of the photons
-        const unsigned int nb_deleted_photon = first_index[ibin+1] - last_index[ibin];
-
-        if( nb_deleted_photon > 0 ) {
-            eraseParticle( last_index[ibin], nb_deleted_photon, compute_cell_keys );
-
-            for( int ii=ibin+1; ii< (int) nbin; ii++ ) {
-                first_index[ii] -= nb_deleted_photon;
-                last_index[ii] -= nb_deleted_photon;
-            }
-        }
-    }
-    eraseParticleTrail( last_index[nbin-1], true );
-}
-
-// ---------------------------------------------------------------------------------------------------------------------
-//! This method eliminates the space between the bins
-//! (presence of empty particles between the bins)
-// ---------------------------------------------------------------------------------------------------------------------
-// void Particles::compress() {
-//     for (auto ibin = 1 ; ibin < first_index.size() ; ibin++) {
-//
-//         // Compute the number of particles
-//         unsigned int particle_number = last_index[ibin] - first_index[ibin];
-//
-//         // Compute the space between the bins
-//         unsigned int bin_space = first_index[ibin] - last_index[ibin-1];
-//
-//         // Determine first index and number of particles to copy.
-//         // We copy from first index to the end to limit the number of copy (more efficient than copying the full bin to keep the same order)
-//
-//         // Compute the number of particles
-//         unsigned int copy_particle_number = 0;
-//
-//         if (bin_space > 0) {
-//
-//             // if last_index[ibin] - bin_space < first_index[ibin], it means that the empty space is larger than the number of particles in ibin
-//             // then we move the full bin
-//             // Else we only move the particles from copy_first_bin to last_index[ibin]
-//             unsigned int copy_first_index = last_index[ibin] - bin_space;
-//
-//             if (copy_first_index < first_index[ibin]) {
-//                 copy_first_index = first_index[ibin];
-//                 copy_particle_number = particle_number;
-//             } else {
-//                 copy_particle_number = bin_space;
-//             }
-//
-//             if (copy_particle_number>0) {
-//                 overwriteParticle(copy_first_index, last_index[ibin-1], copy_particle_number, true );
-//             }
-//
-//             //Update bin indexes
-//             first_index[ibin] = last_index[ibin-1];
-//             last_index[ibin] = first_index[ibin] + copy_particle_number;
-//
-//         }
-//     } // for bin
-//
-//     unsigned int particles_to_erase = Weight.size() - last_index[first_index.size()-1];
-//
-//     if (particles_to_erase > 0) {
-//
-//         // Particles is rezised to fit the real number of particles
-//         // resize(last_index[first_index.size()]-1);
-//         eraseParticleTrail( last_index[first_index.size()-1], true );
-//     }
-// }
-
-void Particles::sum(int ibin_min, int ibin_max) {
-
-    double sum_px = 0;
-    double sum_py = 0;
-    double sum_mx = 0;
-    double sum_my = 0;
-    int iterations = 0;
-    int nb_particles_total = 0;
-
-    for (int ibin = ibin_min ; ibin < ibin_max ; ibin++) {
-        for (int ipart = first_index[ibin] ; ipart < last_index[ibin] ; ipart++) {
-            if (Weight[ipart] > 0) {
-                sum_px += Position[0][ipart];
-                sum_py += Position[1][ipart];
-                sum_mx += Momentum[0][ipart];
-                sum_my += Momentum[1][ipart];
-                iterations += 1;
-            }
-            nb_particles_total ++;
-        }
-    }
-    std::cerr << " Position_x: " << sum_px
-              << " Position_y: " << sum_py
-              << " Momentum_x: " << sum_mx
-              << " Momentum_y: " << sum_my
-              << " nb real particles: " << iterations
-              << " nb particles: " << nb_particles_total
-              << std::endl;
-}
-
-// ---------------------------------------------------------------------------------------------------------------------
 //! Move ipart at new_pos in the particles data structure
 // ---------------------------------------------------------------------------------------------------------------------
 void Particles::moveParticles( int iPart, int new_pos )
@@ -1144,7 +950,7 @@ void Particles::moveParticles( int iPart, int new_pos )
 //    if (tracked)
 //        Id.resize(nParticles+nAdditionalParticles,0);
 //
-//    if (has_quantum_parameter)
+//    if (isQuantumParameter)
 //        Chi.resize(nParticles+nAdditionalParticles,0.);
 //
 //}
@@ -1245,38 +1051,4 @@ bool Particles::testMove( int iPartStart, int iPartEnd, Params &params )
 Particle Particles::operator()( unsigned int iPart )
 {
     return  Particle( *this, iPart );
-}
-
-void Particles::prepareInterpolatedFields( vector<vector<double>> &pold, size_t start, size_t n ) {
-    if( interpolated_fields_ && find( interpolated_fields_->mode_.begin()+6, interpolated_fields_->mode_.end(), 2 ) < interpolated_fields_->mode_.end() ) {
-        pold.resize( 3 );
-        pold[0].resize( n ); copy( Momentum[0].data() + start, Momentum[0].data() + start + n,  pold[0].data() );
-        pold[1].resize( n ); copy( Momentum[1].data() + start, Momentum[1].data() + start + n,  pold[1].data() );
-        pold[2].resize( n ); copy( Momentum[2].data() + start, Momentum[2].data() + start + n,  pold[2].data() );
-    }
-}
-
-void Particles::copyInterpolatedFields( double *Ebuffer, double *Bbuffer, vector<vector<double>> &pold, size_t start, size_t n, size_t buffer_size, double mass ) {
-    vector<double*> buffers = { 
-        Ebuffer, Ebuffer + buffer_size, Ebuffer + 2*buffer_size, // Ex, Ey, Ez
-        Bbuffer, Bbuffer + buffer_size, Bbuffer + 2*buffer_size  // Bx, By, Bz
-    };
-    for( size_t i = 0; i < interpolated_fields_->mode_.size(); i++ ) {
-        if( interpolated_fields_->mode_[i] > 0 ) {
-            interpolated_fields_->F_[i].resize( numberOfParticles(), 0. );
-            if( i < 6 ) { // E or B fields
-                copy( buffers[i], buffers[i] + n,  &( interpolated_fields_->F_[i][start] ) );
-            } else { // work Wx, Wy or Wz (accumulated over time)
-                double *px = Momentum[0].data(), *py = Momentum[1].data(), *pz = Momentum[2].data();
-                double *px_old = pold[0].data(), *py_old = pold[1].data(), *pz_old = pold[2].data();
-                double * p = Momentum[i-6].data();
-                double * p_old = pold[i-6].data();
-                for( size_t ip = 0; ip < n; ip++ ) {
-                    const double g = sqrt( 1.0 + px[ip]*px[ip] + py[ip]*py[ip] + pz[ip]*pz[ip] );
-                    const double g_old = sqrt( 1.0 + px_old[ip]*px_old[ip] + py_old[ip]*py_old[ip] + pz_old[ip]*pz_old[ip] );
-                    interpolated_fields_->F_[i][start+ip] += mass * ( p[ip] - p_old[ip] ) * ( p[ip] + p_old[ip] ) / ( g + g_old );
-                }
-            }
-        }
-    }
 }

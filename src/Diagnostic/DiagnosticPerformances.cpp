@@ -6,7 +6,7 @@
 
 using namespace std;
 
-const unsigned int n_quantities_double = 19;
+const unsigned int n_quantities_double = 16;
 const unsigned int n_quantities_uint   = 4;
 
 // Constructor
@@ -54,7 +54,7 @@ DiagnosticPerformances::DiagnosticPerformances( Params &params, SmileiMPI *smpi 
     // Calculate the number of cells per patch
     ncells_per_patch = 1;
     for( unsigned int idim = 0; idim < params.nDim_field; idim++ ) {
-        ncells_per_patch *= params.patch_size_[idim]+2*params.oversize[idim];
+        ncells_per_patch *= params.n_space[idim]+2*params.oversize[idim];
     }
     
 } // END DiagnosticPerformances::DiagnosticPerformances
@@ -104,9 +104,6 @@ void DiagnosticPerformances::openFile( Params &params, SmileiMPI *smpi )
     quantities_double[13] = "timer_total"     ;
     quantities_double[14] = "memory_total"    ;
     quantities_double[15] = "memory_peak"    ;
-    quantities_double[16] = "timer_envelope"     ;
-    quantities_double[17] = "timer_syncSusceptibility"     ;
-    quantities_double[18] = "timer_partMerging"     ;
     file_->attr( "quantities_double", quantities_double );
     
     file_->flush();
@@ -123,7 +120,7 @@ void DiagnosticPerformances::closeFile()
 
 
 
-void DiagnosticPerformances::init( Params &params, SmileiMPI *smpi, VectorPatch & )
+void DiagnosticPerformances::init( Params &params, SmileiMPI *smpi, VectorPatch &vecPatches )
 {
     // create the file
     openFile( params, smpi );
@@ -140,7 +137,7 @@ bool DiagnosticPerformances::prepare( int itime )
 } // END prepare
 
 
-void DiagnosticPerformances::run( SmileiMPI *, VectorPatch &vecPatches, int itime, SimWindow *, Timers &timers )
+void DiagnosticPerformances::run( SmileiMPI *smpi, VectorPatch &vecPatches, int itime, SimWindow *simWindow, Timers &timers )
 {
     
     #pragma omp master
@@ -220,9 +217,6 @@ void DiagnosticPerformances::run( SmileiMPI *, VectorPatch &vecPatches, int itim
         
         quantities_double[14] = Tools::getMemFootPrint(0);
         quantities_double[15] = Tools::getMemFootPrint(1);
-        quantities_double[16] = timers.envelope         .getTime();
-        quantities_double[17] = timers.susceptibility   .getTime();
-        quantities_double[18] = timers.particleMerging  .getTime();
         
         // Write doubles to file
         iteration_group.array( "quantities_double", quantities_double[0], &filespace_double, &memspace_double );
@@ -306,7 +300,7 @@ void DiagnosticPerformances::run( SmileiMPI *, VectorPatch &vecPatches, int itim
 
 
 // SUPPOSED TO BE EXECUTED ONLY BY MASTER MPI
-uint64_t DiagnosticPerformances::getDiskFootPrint( int istart, int istop, Patch * )
+uint64_t DiagnosticPerformances::getDiskFootPrint( int istart, int istop, Patch *patch )
 {
     uint64_t footprint = 0;
     

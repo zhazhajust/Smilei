@@ -87,19 +87,12 @@ public:
 
     //double** data_;
 
-    Field* clone() override {
-        auto newInstance = new Field2D(dims_);
-        newInstance->name = name;
-        newInstance->copyFrom(this);
-        return newInstance;
-    }
-
-
     virtual double norm2( unsigned int istart[3][2], unsigned int bufsize[3][2] ) override;
-    void put( Field *outField, Params &params, Patch *thisPatch, Patch *outPatch ) override;
-    void add( Field *outField, Params &params, Patch *thisPatch, Patch *outPatch ) override;
-    void get( Field  *inField, Params &params, Patch   *inPatch, Patch *thisPatch ) override;
+    void put( Field *outField, Params &params, SmileiMPI *smpi, Patch *thisPatch, Patch *outPatch ) override;
+    void add( Field *outField, Params &params, SmileiMPI *smpi, Patch *thisPatch, Patch *outPatch ) override;
+    void get( Field  *inField, Params &params, SmileiMPI *smpi, Patch   *inPatch, Patch *thisPatch ) override;
 
+    //!\todo{Comment what are these stuffs (MG for JD)}
     //double *data_2D;
     //! this will present the data as a 2d matrix
     double **data_2D;

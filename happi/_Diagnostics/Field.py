@@ -76,16 +76,14 @@ class Field(Diagnostic):
 		
 		# 1 - verifications, initialization
 		# -------------------------------------------------------------------
-		# Parse the `field` argument and its units
-		
+		# Parse the `field` argument
 		self.operation = field
-		which_units = {"B":"B_r", "E":"E_r", "J":"J_r", "R":"Q_r*N_r", "A":"E_r"}
-		def fieldTranslator(f):
-			return which_units[f[0]], "C['%s']"%f, f
-		self._operation = Operation(self.operation, fieldTranslator, self._ureg)
-		self._fieldname = self._operation.variables
-		self._vunits = self._operation.translated_units
-		self._title  = self._operation.title
+		self._operation = self.operation
+		self._fieldname = []
+		for f in sortedfields:
+			if self._re.search(r"\b"+f+r"\b",self._operation):
+				self._operation = self._re.sub(r"(?<!')"+f+r"\b","C['"+f+"']",self._operation)
+				self._fieldname.append(f)
 		if not self._fieldname:
 			raise Exception("String "+self.operation+" does not seem to include any field")
 		
@@ -273,6 +271,17 @@ class Field(Diagnostic):
 				self._xr = self._np.stack((x3, r3), axis=-1)
 				del x3, r3, r2
 		
+		# Build units
+		units = {}
+		for f in self._fieldname:
+			units.update({ f:{"B":"B_r", "E":"E_r", "J":"J_r", "R":"Q_r*N_r"}[f[0]] })
+		# Make total units and title
+		self._vunits = self.operation
+		self._title  = self.operation
+		for f in self._fieldname:
+			self._vunits = self._vunits.replace(f, units[f])
+		self._vunits = self.units._getUnits(self._vunits)
+		
 		# Set the directory in case of exporting
 		self._exportPrefix = "Field"+str(self.diagNumber)+"_"+"".join(self._fieldname)
 		self._exportDir = self._setExportDir(self._exportPrefix)
@@ -304,15 +313,6 @@ class Field(Diagnostic):
 		try:    times = [float(a.name[6:]) for a in self._h5items]
 		except Exception as e: times = []
 		return self._np.double(times)
-	
-	def _getCenters(self, axis_index, timestep, h5item = None):
-		xoffset = 0
-		if self.moving and 'x' in self._type and axis_index == 0:
-			if h5item is None:
-				h5item = self._h5items[self._data[timestep]]
-			if "x_moved" in h5item.attrs:
-				xoffset = h5item.attrs["x_moved"]
-		return  xoffset + self._np.array(self._centers[axis_index])
 	
 	# get the value of x_moved for a requested timestep
 	def getXmoved(self, t):
@@ -359,7 +359,7 @@ class Field(Diagnostic):
 			C.update({ field:B })
 		
 		# Calculate the operation
-		A = self._operation.eval(locals())
+		A = eval(self._operation)
 		# Apply the averaging
 		A = self._np.reshape(A,self._finalShape)
 		for iaxis in range(self._naxes):
@@ -367,6 +367,8 @@ class Field(Diagnostic):
 				A = self._np.mean(A, axis=iaxis, keepdims=True)
 		# remove averaged axes
 		A = self._np.squeeze(A)
+		# transform if requested
+		if callable(self._data_transform): A = self._data_transform(A)
 		return A
 	
 	# Method to obtain the data only
@@ -382,14 +384,6 @@ class Field(Diagnostic):
 		index = self._data[t]
 		C = {}
 		h5item = self._h5items[index]
-		
-		# Handle moving window
-		if self.moving and "x_moved" in h5item.attrs and 'x' in self._type:
-			self._xoffset = h5item.attrs["x_moved"]
-			if self.dim>1 and hasattr(self,"_extent"):
-				self._extent[0] = self._xfactor*(self._xoffset + self._centers[0][ 0])
-				self._extent[1] = self._xfactor*(self._xoffset + self._centers[0][-1])
-		
 		for field in self._fieldname: # for each field in operation
 			available_modes = self._fields[field]
 			F = self._np.zeros(self._finalShape)
@@ -417,12 +411,15 @@ class Field(Diagnostic):
 			C.update({ field:F })
 		
 		# Calculate the operation
-		A = self._operation.eval(locals())
+		A = eval(self._operation)
 		# Apply the averaging
 		A = self._np.reshape(A,self._finalShape)
 		for iaxis in range(self._naxes):
 			if self._averages[iaxis]:
 				A = self._np.mean(A, axis=iaxis, keepdims=True)
+		# remove averaged axes
+		A = self._np.squeeze(A)
+		if callable(self._data_transform): A = self._data_transform(A)
 		return A
 	
 	# Method to obtain the data only
@@ -439,14 +436,6 @@ class Field(Diagnostic):
 		index = self._data[t]
 		C = {}
 		h5item = self._h5items[index]
-		
-		# Handle moving window
-		if self.moving and "x_moved" in h5item.attrs and 'x' in self._type:
-			self._xoffset = h5item.attrs["x_moved"]
-			if self.dim>1 and hasattr(self,"_extent"):
-				self._extent[0] = self._xfactor*(self._xoffset + self._centers[0][ 0])
-				self._extent[1] = self._xfactor*(self._xoffset + self._centers[0][-1])
-		
 		step = 2 if self._is_complex else 1
 		for field in self._fieldname: # for each field in operation
 			available_modes = self._fields[field]
@@ -470,7 +459,7 @@ class Field(Diagnostic):
 			C.update({ field:F })
 		
 		# Calculate the operation
-		A = self._operation.eval(locals())
+		A = eval(self._operation)
 		# Apply the averaging
 		A = self._np.reshape(A,self._finalShape)
 		for iaxis in range(self._naxes):
@@ -478,6 +467,7 @@ class Field(Diagnostic):
 				A = self._np.mean(A, axis=iaxis, keepdims=True)
 		# remove averaged axes
 		A = self._np.squeeze(A)
+		if callable(self._data_transform): A = self._data_transform(A)
 		return A
 	
 	@staticmethod
@@ -485,8 +475,8 @@ class Field(Diagnostic):
 		# Separate field name from mode or species
 		for prefix in [
 			"Bl_m_","Br_m_","Bt_m_","Bl_","Br_","Bt_","El_","Er_","Et_",
-			"Rho_","RhoOld_","Jl_","Jr_","Jt_","Br_mBTIS3_","Bt_mBTIS3_",
-			"Env_A_abs_","Env_E_abs_","Env_Ex_abs_","Env_Chi_","A_","Aold_"
+			"Rho_","RhoOld_","Jl_","Jr_","Jt_",
+			"Env_A_abs_","Env_E_abs_","Env_Ex_abs_","Env_Chi_"
 		]:
 			if field.startswith(prefix):
 				fname = prefix[:-1]

@@ -2,6 +2,7 @@
     GENERAL DEFINITIONS FOR SMILEI
 """
 
+import sys
 import math, os, gc, operator
 
 def _add_metaclass(metaclass):
@@ -177,8 +178,7 @@ class Main(SmileiSingleton):
     number_of_AM_classical_Poisson_solver = 1
     timestep_over_CFL = None
     cell_sorting = None
-    gpu_computing = False                      # Activate the computation on GPU
-    
+
     # PXR tuning
     spectral_solver_order = []
     initial_rotational_cleaning = False
@@ -192,28 +192,13 @@ class Main(SmileiSingleton):
     solve_relativistic_poisson = False
     relativistic_poisson_max_iteration = 50000
     relativistic_poisson_max_error = 1.e-22
-    
-    # BTIS3 interpolator
-    use_BTIS3_interpolation = False
 
     # Default fields
     maxwell_solver = 'Yee'
     EM_boundary_conditions = [["periodic"]]
     EM_boundary_conditions_k = []
     save_magnectic_fields_for_SM = True
-    number_of_pml_cells = [[10]]
-
-    def default_sigma(x):
-        return 20. * x**2  
-    def default_integrate_sigma(x):
-        return 20./3. * x**3  
-    def default_kappa(x):
-        return 1 + 79. * x**4  
-    def default_integrate_kappa(x):
-        return x + 79./5. * x**5  
-
-    pml_sigma = [default_sigma, default_sigma, default_sigma, default_integrate_sigma]
-    pml_kappa = [default_kappa, default_kappa, default_kappa, default_integrate_kappa]
+    number_of_pml_cells = [[10,10],[10,10],[10,10]]
     time_fields_frozen = 0.
     Laser_Envelope_model = False
 
@@ -345,6 +330,7 @@ class MovingWindow(SmileiSingleton):
     """Moving window parameters"""
 
     time_start = 0.
+    time_stop = sys.float_info.max
     velocity_x = 1.
     number_of_additional_shifts = 0
     additional_shifts_time = 0.
@@ -387,7 +373,6 @@ class Species(SmileiComponent):
     charge_density = None
     number_density = None
     mean_velocity = []  # Default value is     0, set in ParticleCreator function in species.cpp
-    mean_velocity_AM = []
     temperature = []    # Default value is 1e-10, set in ParticleCreator function in species.cpp
     thermal_boundary_temperature = []
     thermal_boundary_velocity = [0.,0.,0.]
@@ -398,7 +383,6 @@ class Species(SmileiComponent):
     radiation_photon_species = None
     radiation_photon_sampling = 1
     radiation_photon_gamma_threshold = 2.
-    radiation_max_emissions = 10
 
     # Multiphoton Breit-Wheeler parameters
     multiphoton_Breit_Wheeler = [None,None]
@@ -427,7 +411,6 @@ class Species(SmileiComponent):
     maximum_charge_state = 0
     is_test = False
     relativistic_field_initialization = False
-    keep_interpolated_fields = []
 
 class ParticleInjector(SmileiComponent):
     """Parameters for particle injection at boundaries"""
@@ -467,9 +450,6 @@ class LaserEnvelope(SmileiSingleton):
     envelope_solver = "explicit"
     envelope_profile = None
     Envelope_boundary_conditions = [["reflective"]]
-    Env_pml_sigma_parameters = [[0.90,2],[10.0,2],[10.0,2]]
-    Env_pml_kappa_parameters = [[1.00,1.00,2],[1.00,1.00,2],[1.00,1.00,2]]
-    Env_pml_alpha_parameters = [[0.90,0.90,1],[0.75,0.75,1],[0.75,0.75,1]]
     polarization_phi = 0.
     ellipticity = 0.
 
@@ -482,7 +462,6 @@ class Collisions(SmileiComponent):
     coulomb_log_factor = 1.
     every = 1
     debug_every = 0
-    time_frozen = 0
     ionizing = False
     nuclear_reaction = None
     nuclear_reaction_multiplier = 0.
@@ -500,7 +479,6 @@ class DiagProbe(SmileiComponent):
     fields = []
     flush_every = 1
     time_integral = False
-    datatype = "double"
 
 class DiagParticleBinning(SmileiComponent):
     """Particle Binning diagnostic"""
@@ -550,7 +528,6 @@ class DiagFields(SmileiComponent):
     time_average = 1
     subgrid = None
     flush_every = 1
-    datatype = "double"
 
 class DiagTrackParticles(SmileiComponent):
     """Track diagnostic"""
@@ -614,7 +591,7 @@ class RadiationReaction(SmileiComponent):
     # Parameters for computing the tables
     Niel_computation_method = "table"
 
-# MultiphotonBreitWheeler pair creation
+# MutliphotonBreitWheeler pair creation
 class MultiphotonBreitWheeler(SmileiComponent):
     """
     Photon decay into electron-positron pairs

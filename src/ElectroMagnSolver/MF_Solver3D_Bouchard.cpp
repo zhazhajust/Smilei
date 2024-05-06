@@ -15,11 +15,11 @@ MF_Solver3D_Bouchard::MF_Solver3D_Bouchard( Params &params )
     dy = params.cell_length[1];
     dz = params.cell_length[2];
     double dx_ov_dt  = dx/dt;
-    //double dy_ov_dt  = dy/dt;
-    //double dz_ov_dt  = dz/dt;
-    //double dt_ov_dx  = dt/dx;
-    //double dt_ov_dy  = dt/dy;
-    //double dt_ov_dz  = dt/dz;
+    double dy_ov_dt  = dy/dt;
+    double dz_ov_dt  = dz/dt;
+    double dt_ov_dx  = dt/dx;
+    double dt_ov_dy  = dt/dy;
+    double dt_ov_dz  = dt/dz;
     //Not necessary to have dx=dy=dz, but dispersion law are modify
     //In particular if dz >> dx,dy then solver become like the 2d solver
     //if( (dx!=dy)||(dx!=dz)||(dy!=dz) ) {
@@ -67,12 +67,6 @@ MF_Solver3D_Bouchard::~MF_Solver3D_Bouchard()
 
 void MF_Solver3D_Bouchard::operator()( ElectroMagn *fields )
 {
-    const unsigned int nx_p = fields->dimPrim[0];
-    const unsigned int nx_d = fields->dimDual[0];
-    const unsigned int ny_p = fields->dimPrim[1];
-    const unsigned int ny_d = fields->dimDual[1];
-    const unsigned int nz_p = fields->dimPrim[2];
-    const unsigned int nz_d = fields->dimDual[2];
     // Static-cast of the fields
     Field3D *Ex3D = static_cast<Field3D *>( fields->Ex_ );
     Field3D *Ey3D = static_cast<Field3D *>( fields->Ey_ );

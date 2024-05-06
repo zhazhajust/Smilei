@@ -36,7 +36,7 @@ public:
     //! reaction induced by the nonlinear inverse Compton scattering
     //! \param particles   particle object containing the particle
     //!                    properties
-    //! \param photon      Particles object that will receive emitted photons
+    //! \param photon_species species that will receive emitted photons
     //! \param smpi        MPI properties
     //! \param nlicsTables Cross-section data tables and useful functions
     //                     for nonlinear inverse Compton scattering
@@ -47,14 +47,13 @@ public:
     // ---------------------------------------------------------------------
     virtual void operator()(
         Particles       &particles,
-        Particles       *photons,
+        Species         *photon_species,
         SmileiMPI       *smpi,
-        RadiationTables &radiation_tables,
+        RadiationTables &RadiationTables,
         double          &radiated_energy,
         int             istart,
         int             iend,
         int             ithread,
-        int             ibin,
         int             ipart_ref = 0);
         
 protected:

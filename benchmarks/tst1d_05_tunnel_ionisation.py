@@ -73,7 +73,6 @@ Species(
 	boundary_conditions = [
 		["remove", "remove"],
 	],
-	keep_interpolated_fields = ["Ex", "Ey", "Ez", "Wx", "Wy", "Wz"],
 )
 
 def By(t):
@@ -114,6 +113,5 @@ DiagParticleBinning(
 
 DiagTrackParticles(
 	species = "electron",
-	every = [1,1000,30],
-	attributes = ["x","px","py","pz","w","Wy"]
+	every = 30
 )

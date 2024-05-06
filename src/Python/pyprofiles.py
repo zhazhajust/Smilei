@@ -1,4 +1,7 @@
 # Some predefined profiles (see doc)
+from math import pi, cos, sin, tan, atan, atan2, sqrt, exp, factorial
+from scipy.special import eval_genlaguerre
+from numpy import sign
 
 def constant(value, xvacuum=-float("inf"), yvacuum=-float("inf"), zvacuum=-float("inf")):
     global Main
@@ -585,6 +588,49 @@ def LaserEnvelopeGaussian2D( a0=1., omega=1., focus=None, waist=3., time_envelop
         ellipticity         = ellipticity
     )
 
+def LaserLaguerreGaussian2D( box_side="xmin", a0=1., omega=1.,l=0, p=0, focus=None, waist=3., incidence_angle=[0.],
+        polarization_phi=0., ellipticity=0., time_envelope=tconstant(), phase_zero=0.):
+
+    # Polarization and amplitude
+    [dephasing, amplitudeZ, amplitudeY] = transformPolarization(polarization_phi, ellipticity)
+    amplitudeY *= a0 * omega
+    amplitudeZ *= a0 * omega
+
+    # Space and phase envelopes
+    Zr = omega * waist**2/2.
+    if incidence_angle == [0.]:
+        x = -focus[0]
+        w = sqrt( (1.+(x/Zr)**2) ) * waist
+
+        c_lp = pow(abs(l),abs(l)) * exp(abs(l)/2)
+        #c_lp = pow(abs(l),-l) * exp(l/2)                                #normalization so that maximum E amplitude = a0
+        #c_lp = (2 / pi) * sqrt(factorial(p)/factorial(p+abs(l)))       #normalization so that full space energy = a0
+
+        gouy = - (abs(l)+2*p+1)*atan(x/Zr)
+
+        R = x + Zr**2/x
+        boundary_conditions = [
+                                  ["stop", "stop"],
+                                  ["reflective", "reflective"],
+                              ],
+        def spatial(y):
+            r = abs(y-focus[1])
+            return c_lp * (waist/w) * pow(sqrt(2)*r/w, abs(l)) * eval_genlaguerre(p, abs(l), 2*pow(r/w,2)) * exp(-r**2/w**2)
+
+        def phase(y):
+            return l*pi*sign(y)
+
+    # Create Laser
+    Laser(
+        box_side       = box_side,
+        omega          = omega,
+        chirp_profile  = tconstant(),
+        time_envelope  = time_envelope,
+        space_envelope = [ lambda y:amplitudeY*spatial(y), lambda y:amplitudeZ*spatial(y) ],
+        phase          = [ lambda y:phase(y)-phase_zero+dephasing, lambda y:phase(y)-phase_zero ],
+        delay_phase    = [ 0., dephasing ]
+    )
+
 def LaserGaussian3D( box_side="xmin", a0=1., omega=1., focus=None, waist=3., incidence_angle=[0.,0.],
         polarization_phi=0., ellipticity=0., time_envelope=tconstant(), phase_zero=0.):
     from math import pi, cos, sin, tan, atan, sqrt, exp
@@ -703,9 +749,6 @@ def LaserGaussianAM( box_side="xmin", a0=1., omega=1., focus=None, waist=3.,
 
 def LaserEnvelopeGaussianAM( a0=1., omega=1., focus=None, waist=3., time_envelope=tconstant(),
         envelope_solver = "explicit",Envelope_boundary_conditions = [["reflective"]],
-        Env_pml_sigma_parameters = [[0.90,2],[10.0,2],[10.0,2]],
-        Env_pml_kappa_parameters = [[1.00,1.00,2],[1.00,1.00,2],[1.00,1.00,2]],
-        Env_pml_alpha_parameters = [[0.90,0.90,1],[0.75,0.75,1],[0.75,0.75,1]],
         polarization_phi = 0.,ellipticity = 0.):
     import cmath
     from numpy import exp, sqrt, arctan, vectorize
@@ -728,9 +771,6 @@ def LaserEnvelopeGaussianAM( a0=1., omega=1., focus=None, waist=3., time_envelop
         envelope_profile    = gaussian_beam_with_temporal_profile,
         envelope_solver     = envelope_solver,
         Envelope_boundary_conditions = Envelope_boundary_conditions,
-        Env_pml_sigma_parameters = Env_pml_sigma_parameters,
-        Env_pml_kappa_parameters = Env_pml_kappa_parameters,
-        Env_pml_alpha_parameters = Env_pml_alpha_parameters,
         polarization_phi    = polarization_phi,
         ellipticity         = ellipticity
     )

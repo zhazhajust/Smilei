@@ -19,12 +19,13 @@ public:
     //! Copy patch field to current "data" buffer
     void getField( Patch *patch, unsigned int ) override;
     
-    H5Write writeField( H5Write*, std::string ) override;
+    H5Write writeField( H5Write*, std::string, int ) override;
     
 private:
 
-    std::vector<unsigned int> buffer_skip_x, buffer_skip_y, buffer_skip_z;
-
+    unsigned int rewrite_npatch, rewrite_xmin, rewrite_ymin, rewrite_zmin, rewrite_npatchx, rewrite_npatchy, rewrite_npatchz;
+    unsigned int rewrite_size[3], rewrite_start_in_file[3];
+    std::vector<std::vector<unsigned int> > rewrite_patch;
 };
 
 #endif

@@ -36,6 +36,8 @@
 
 #include "DiagnosticTrack.h"
 
+#include "SpeciesMetrics.h"
+
 using namespace std;
 
 
@@ -66,14 +68,14 @@ void SpeciesVAdaptiveMixedSort::resizeCluster( Params &params )
     if( vectorized_operators ) {
 
         // We recompute the number of cells
-        unsigned int ncells = ( params.patch_size_[0]+1 );
+        unsigned int ncells = ( params.n_space[0]+1 );
         for( unsigned int i=1; i < params.nDim_field; i++ ) {
-            ncells *= ( params.patch_size_[i]+1 );
+            ncells *= ( params.n_space[i]+1 );
         }
 
         // We keep the current number of particles
         // int npart = particles->last_index[particles->last_index.size()-1];
-        // int size = params.patch_size_[0]/cluster_width_;
+        // int size = params.n_space[0]/cluster_width_;
 
         particles->last_index.resize( ncells, 0 );
         particles->first_index.resize( ncells, 0 );
@@ -100,40 +102,40 @@ void SpeciesVAdaptiveMixedSort::resizeCluster( Params &params )
 //! Compute part_cell_keys at patch creation.
 //! This operation is normally done in the pusher to avoid additional particles pass.
 // -----------------------------------------------------------------------------
-// void SpeciesVAdaptiveMixedSort::computeParticleCellKeys( Params &params )
-// {
-// 
-//     unsigned int ip, nparts;
-//     int IX;
-//     double X;
-// 
-//     //Number of particles before exchange
-//     nparts = particles->size();
-// 
-//     // Cell_keys is resized at the current number of particles
-//     particles->resizeCellKeys( nparts );
-// 
-//     // Reinitialize count to 0
-//     for( unsigned int ic=0; ic < count.size() ; ic++ ) {
-//         count[ic] = 0 ;
-//     }
-// 
-//     #pragma omp simd
-//     for( ip=0; ip < nparts ; ip++ ) {
-//         // Counts the # of particles in each cell (or sub_cell) and store it in sparticles->last_index.
-//         for( unsigned int ipos=0; ipos < nDim_particle ; ipos++ ) {
-//             X = particles->position( ipos, ip )-min_loc_vec[ipos];
-//             IX = round( X * dx_inv_[ipos] );
-//             particles->cell_keys[ip] = particles->cell_keys[ip] * this->length_[ipos] + IX;
-//         }
-//     }
-// 
-//     // Reduction of the number of particles per cell in count
-//     for( ip=0; ip < nparts ; ip++ ) {
-//         count[particles->cell_keys[ip]] ++ ;
-//     }
-// 
-// }
+void SpeciesVAdaptiveMixedSort::computeParticleCellKeys( Params &params )
+{
+
+    unsigned int ip, nparts;
+    int IX;
+    double X;
+
+    //Number of particles before exchange
+    nparts = particles->size();
+
+    // Cell_keys is resized at the current number of particles
+    particles->resizeCellKeys( nparts );
+
+    // Reinitialize count to 0
+    for( unsigned int ic=0; ic < count.size() ; ic++ ) {
+        count[ic] = 0 ;
+    }
+
+    #pragma omp simd
+    for( ip=0; ip < nparts ; ip++ ) {
+        // Counts the # of particles in each cell (or sub_cell) and store it in sparticles->last_index.
+        for( unsigned int ipos=0; ipos < nDim_particle ; ipos++ ) {
+            X = particles->position( ipos, ip )-min_loc_vec[ipos];
+            IX = round( X * dx_inv_[ipos] );
+            particles->cell_keys[ip] = particles->cell_keys[ip] * this->length_[ipos] + IX;
+        }
+    }
+
+    // Reduction of the number of particles per cell in count
+    for( ip=0; ip < nparts ; ip++ ) {
+        count[particles->cell_keys[ip]] ++ ;
+    }
+
+}
 
 void SpeciesVAdaptiveMixedSort::importParticles( Params &params, Patch *patch, Particles &source_particles, vector<Diagnostic *> &localDiags )
 {
@@ -145,12 +147,12 @@ void SpeciesVAdaptiveMixedSort::importParticles( Params &params, Patch *patch, P
     }
 }
 
-void SpeciesVAdaptiveMixedSort::sortParticles( Params &params )
+void SpeciesVAdaptiveMixedSort::sortParticles( Params &params, Patch * patch )
 {
     if( vectorized_operators ) {
-        SpeciesV::sortParticles( params );
+        SpeciesV::sortParticles( params , patch);
     } else {
-        Species::sortParticles( params );
+        Species::sortParticles( params, patch );
     }
 }
 
@@ -176,7 +178,7 @@ void SpeciesVAdaptiveMixedSort::defaultConfigure( Params &params, Patch *patch )
     resizeCluster( params );
 
     // We perform the sorting
-    this->sortParticles( params );
+    this->sortParticles( params , patch);
 
     // Reconfigure species to be imported
     this->reconfigure_particle_importation();
@@ -195,7 +197,7 @@ void SpeciesVAdaptiveMixedSort::configuration( Params &params, Patch *patch )
     float vecto_time = 0.;
     float scalar_time = 0.;
 
-    // We first compute cell_keys and the number of particles per cell
+    // We first compute cell_keys: the number of particles per cell
     this->computeParticleCellKeys( params );
 
     // Species with particles
@@ -203,9 +205,9 @@ void SpeciesVAdaptiveMixedSort::configuration( Params &params, Patch *patch )
 
         // --------------------------------------------------------------------
         // Metrics 2 - based on the evaluation of the computational time
-        (*part_comp_time_)( count,
-                        vecto_time,
-                        scalar_time );
+        SpeciesMetrics::get_computation_time( this->count,
+                                              vecto_time,
+                                              scalar_time );
 
         if( vecto_time <= scalar_time ) {
             this->vectorized_operators = true;
@@ -223,11 +225,8 @@ void SpeciesVAdaptiveMixedSort::configuration( Params &params, Patch *patch )
 #ifdef  __DEBUG
     std::cerr << "  > Species " << this->name_ << " configuration (" << this->vectorized_operators
               << ") default: " << params.adaptive_default_mode
-              << " in patch (" << patch->Pcoordinates[0];
-    for( unsigned int idim = 1; idim<patch->Pcoordinates.size(); idim++ ) {
-        std::cerr << "," <<  patch->Pcoordinates[idim];
-    }
-    std::cerr << ") of MPI process " << patch->MPI_me_
+              << " in patch (" << patch->Pcoordinates[0] << "," <<  patch->Pcoordinates[1] << "," <<  patch->Pcoordinates[2] << ")"
+              << " of MPI process " << patch->MPI_me_
               << " (vecto time: " << vecto_time
               << ", scalar time: " << scalar_time
               << ", particle number: " << particles->size()
@@ -244,7 +243,7 @@ void SpeciesVAdaptiveMixedSort::configuration( Params &params, Patch *patch )
     resizeCluster( params );
 
     // We perform the sorting
-    this->sortParticles( params );
+    this->sortParticles( params , patch);
 
     // Reconfigure species to be imported
     this->reconfigure_particle_importation();
@@ -267,8 +266,8 @@ void SpeciesVAdaptiveMixedSort::reconfiguration( Params &params, Patch *patch )
     float scalar_time = 0;
 
     //split cell into smaller sub_cells for refined sorting
-    //ncell = (params.patch_size_[0]+1);
-    //for ( unsigned int i=1; i < params.nDim_field; i++) ncell *= (params.patch_size_[i]+1);
+    //ncell = (params.n_space[0]+1);
+    //for ( unsigned int i=1; i < params.nDim_field; i++) ncell *= (params.n_space[i]+1);
 
     // We first compute cell_keys: the number of particles per cell
     // if the current mode is without vectorization
@@ -291,9 +290,9 @@ void SpeciesVAdaptiveMixedSort::reconfiguration( Params &params, Patch *patch )
     
     // --------------------------------------------------------------------
     // Metrics 2 - based on the evaluation of the computational time
-    (*part_comp_time_)( count,
-                    vecto_time,
-                    scalar_time );
+    SpeciesMetrics::get_computation_time( count,
+                                          vecto_time,
+                                          scalar_time );
 
     if( ( vecto_time < scalar_time && this->vectorized_operators == false )
             || ( vecto_time > scalar_time && this->vectorized_operators == true ) ) {
@@ -309,11 +308,8 @@ void SpeciesVAdaptiveMixedSort::reconfiguration( Params &params, Patch *patch )
 
 #ifdef  __DEBUG
         std::cerr << "  > Species " << this->name_ << " reconfiguration (" << this->vectorized_operators
-                  << ") in patch (" << patch->Pcoordinates[0];
-        for( unsigned int idim = 1; idim<patch->Pcoordinates.size(); idim++ ) {
-            std::cerr << "," <<  patch->Pcoordinates[idim];
-        }
-        std::cerr << ") of MPI process " << patch->MPI_me_
+                  << ") in patch (" << patch->Pcoordinates[0] << "," <<  patch->Pcoordinates[1] << "," <<  patch->Pcoordinates[2] << ")"
+                  << " of MPI process " << patch->MPI_me_
                   << " (vecto time: " << vecto_time
                   << ", scalar time: " << scalar_time
                   << ", particle number: " << particles->size()
@@ -330,7 +326,7 @@ void SpeciesVAdaptiveMixedSort::reconfiguration( Params &params, Patch *patch )
         resizeCluster( params );
 
         // We perform the sorting
-        this->sortParticles( params );
+        this->sortParticles( params, patch );
 
         // Reconfigure species to be imported
         this->reconfigure_particle_importation();
@@ -376,7 +372,7 @@ void SpeciesVAdaptiveMixedSort::reconfigure_particle_importation()
     }
     if( this->Multiphoton_Breit_Wheeler_process ) {
         for( int k=0; k<2; k++ ) {
-            this->mBW_pair_species_[k]->vectorized_operators = this->vectorized_operators;
+            this->mBW_pair_species[k]->vectorized_operators = this->vectorized_operators;
         }
     }
 }

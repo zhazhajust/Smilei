@@ -27,7 +27,7 @@ public:
     void fieldsAndCurrents( ElectroMagn *EMfields, Particles &particles, SmileiMPI *smpi, int *istart, int *iend, int ithread, LocalFields *JLoc, double *RhoLoc ) override ;
 
     //! Wrapper called by the particle dynamics section
-    void fieldsWrapper( ElectroMagn *EMfields, Particles &particles, SmileiMPI *smpi, int *istart, int *iend, int ithread, unsigned int scell = 0, int ipart_ref = 0 ) override ;
+    void fieldsWrapper( ElectroMagn *EMfields, Particles &particles, SmileiMPI *smpi, int *istart, int *iend, int ithread, int ipart_ref = 0 ) override ;
 
     //! Interpolator specific to tracked particles. A selection of particles may be provided
     void fieldsSelection( ElectroMagn *EMfields, Particles &particles, double *buffer, int offset, std::vector<unsigned int> *selection ) override final;
@@ -51,7 +51,7 @@ public:
     };
 
     //! Computation of a field from provided coefficients
-    inline double __attribute__((always_inline)) compute( double *coeffx, double *coeffy, double *coeffz, double *f, int idx, int idy, int idz, int, int ny, int nz )
+    inline double __attribute__((always_inline)) compute( double *coeffx, double *coeffy, double *coeffz, double *f, int idx, int idy, int idz, int nx, int ny, int nz )
     {
         double interp_res( 0. );
         //unroll ?

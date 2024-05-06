@@ -41,13 +41,13 @@ class RadiationDiagRadiationSpectrum : public Radiation {
         // ---------------------------------------------------------------------
         virtual void operator()(
             Particles &particles,
-            Particles *photons,
+            Species *photon_species,
             SmileiMPI *smpi,
-            RadiationTables &radiation_tables,
+            RadiationTables &RadiationTables,
             double          &radiated_energy,
             int istart,
             int iend,
-            int ithread, int ibin, int ipart_ref = 0 );
+            int ithread, int ipart_ref = 0 );
 
     protected:
 

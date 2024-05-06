@@ -32,7 +32,7 @@ public:
     //! regardless the number of particles per cell
     void defaultConfigure( Params &params, Patch *patch ) override;
     
-    void sortParticles( Params &params ) override;
+    void sortParticles( Params &params, Patch * patch ) override;
     
     //! This function configures the species according to the vectorization mode
     void configuration( Params &params, Patch *patch ) override;
@@ -47,7 +47,7 @@ public:
     void reconfigure_particle_importation();
     
     //! Compute cell_keys for all particles of the current species
-    // void computeParticleCellKeys( Params &params ) override;
+    void computeParticleCellKeys( Params &params ) override;
     
     //! Method to import particles in this species while conserving the sorting among bins
     void importParticles( Params &, Patch *, Particles &, std::vector<Diagnostic *> & )override;

@@ -5,9 +5,7 @@ Overview
 
 .. toctree::
 
-   Overview/synopsis
-   Overview/highlights
-   Overview/releases
-   Overview/licence
-   Overview/material
-   Overview/partners
+   licence
+   synopsis
+   highlights
+   releases

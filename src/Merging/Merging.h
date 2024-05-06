@@ -24,7 +24,7 @@ class Merging
 public:
 
     //! Creator for Merging
-    Merging( Species *species, Random * rand );
+    Merging( Params &params, Species *species, Random * rand );
 
     virtual ~Merging();
 
@@ -38,6 +38,7 @@ public:
         double mass,
         Particles &particles,
         std::vector <int> &mask,
+        SmileiMPI *smpi,
         int istart,
         int iend,
         int & count) = 0;

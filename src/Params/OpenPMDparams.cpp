@@ -38,7 +38,7 @@ OpenPMDparams::OpenPMDparams( Params &p ):
         fieldSolver = "other";
         fieldSolverParameters = params->maxwell_sol;
     }
-    patchSize = params->patch_size_;
+    patchSize = params->n_space;
     
     // Units
     unitDimension.resize( SMILEI_NUNITS );
@@ -86,11 +86,6 @@ OpenPMDparams::OpenPMDparams( Params &p ):
         } else if( unit_type == SMILEI_UNIT_TIME ) {
             unitDimension[unit_type][2] = 1.;
             unitSI[unit_type] = 1. / Wr; // 1 / Wr
-        } else if( unit_type == SMILEI_UNIT_ENERGY ) {
-            unitDimension[unit_type][0] = 2.;
-            unitDimension[unit_type][1] = 1.;
-            unitDimension[unit_type][2] = -2.;
-            unitSI[unit_type] = 8.187104382e-14; // me * c^2
         }
     }
     
@@ -112,11 +107,8 @@ OpenPMDparams::OpenPMDparams( Params &p ):
             } else if( params->EM_BCs[i][j].substr(0,4) == "ramp" ) {
                 fieldBoundary          .addString( "open" );
                 fieldBoundaryParameters.addString( params->EM_BCs[i][j] );
-            } else if( params->EM_BCs[i][j] == "PML" ) {
-                fieldBoundary          .addString( "open" );
-                fieldBoundaryParameters.addString( "PML" );
             } else {
-                ERROR( " impossible boundary condition: "<<params->EM_BCs[i][j] );
+                //ERROR( " impossible boundary condition " );
             }
             particleBoundary          .addString( "" );
             particleBoundaryParameters.addString( "" );
@@ -157,7 +149,7 @@ void OpenPMDparams::writeBasePathAttributes( H5Write &location, unsigned int iti
     location.attr( "timeUnitSI", unitSI[SMILEI_UNIT_TIME] );
 }
 
-void OpenPMDparams::writeParticlesAttributes( H5Write & )
+void OpenPMDparams::writeParticlesAttributes( H5Write &location )
 {
 }
 
@@ -201,7 +193,7 @@ void OpenPMDparams::writeFieldAttributes( H5Write &location, vector<unsigned int
     location.attr( "gridUnitSI", unitSI[SMILEI_UNIT_POSITION] );
 }
 
-void OpenPMDparams::writeSpeciesAttributes( H5Write & )
+void OpenPMDparams::writeSpeciesAttributes( H5Write &location )
 {
 }
 

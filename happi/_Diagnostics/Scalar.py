@@ -161,4 +161,6 @@ class Scalar(Diagnostic):
 			return []
 		# Get value at selected time
 		A = self._values[ self._data[t] ]
+
+		if callable(self._data_transform): A = self._data_transform(A)
 		return A

@@ -19,7 +19,14 @@ using namespace std;
 ElectroMagnBC3D_PML::ElectroMagnBC3D_PML( Params &params, Patch *patch, unsigned int i_boundary )
     : ElectroMagnBC3D( params, patch, i_boundary )
 {
-    
+
+    std::vector<unsigned int> n_space(params.n_space);
+    std::vector<unsigned int> oversize(params.oversize);
+    if( params.multiple_decomposition ) {
+        n_space = params.n_space_region;
+        oversize = params.region_oversize;
+    }
+
     pml_solver_ = SolverFactory::createPML( params );
     if (params.maxwell_sol=="Yee"){
         nsolver=2;
@@ -34,19 +41,24 @@ ElectroMagnBC3D_PML::ElectroMagnBC3D_PML( Params &params, Patch *patch, unsigned
         nsolver=2;
     }
 
-    if( patch->isBoundary( i_boundary_ ) ) {
+    if ( ( i_boundary_ == 0 && patch->isXmin() )
+         || ( i_boundary_ == 1 && patch->isXmax() )
+         || ( i_boundary_ == 2 && patch->isYmin() )
+         || ( i_boundary_ == 3 && patch->isYmax() )
+         || ( i_boundary_ == 4 && patch->isZmin() )
+         || ( i_boundary_ == 5 && patch->isZmax() ) ) {
 
-        int iDim = i_boundary_ / 2;
+        int iDim = 0*((i_boundary_==0)||(i_boundary_==1))+1*((i_boundary_==2)||(i_boundary_==3))+2*((i_boundary_==4)||(i_boundary_==5));
         int min_or_max = (i_boundary_)%2;
 
-        domain_oversize_x =  patch->oversize[0] ;
-        domain_oversize_y =  patch->oversize[1] ;
-        domain_oversize_z =  patch->oversize[2] ;
+        domain_oversize_x =  oversize[0] ;
+        domain_oversize_y =  oversize[1] ;
+        domain_oversize_z =  oversize[2] ;
 
         if (patch->isXmin() ) {//&& i_boundary_ == 0 ) {
             ncells_pml_xmin = params.number_of_pml_cells[0][0];
-            ncells_pml_domain_xmin = ncells_pml_xmin + 1*patch->oversize[0] + nsolver/2;
-            domain_oversize_x = patch->oversize[0] ;
+            ncells_pml_domain_xmin = ncells_pml_xmin + 1*oversize[0] + nsolver/2;
+            domain_oversize_x = oversize[0] ;
         }
         else {
             ncells_pml_xmin = 0;
@@ -54,8 +66,8 @@ ElectroMagnBC3D_PML::ElectroMagnBC3D_PML( Params &params, Patch *patch, unsigned
         }
         if (patch->isXmax() ) {//&& i_boundary_ == 1 ) {
             ncells_pml_xmax = params.number_of_pml_cells[0][1];
-            ncells_pml_domain_xmax = ncells_pml_xmax + 1*patch->oversize[0] + nsolver/2;
-            domain_oversize_x = patch->oversize[0] ;
+            ncells_pml_domain_xmax = ncells_pml_xmax + 1*oversize[0] + nsolver/2;
+            domain_oversize_x = oversize[0] ;
         }
         else {
             ncells_pml_xmax = 0;
@@ -63,8 +75,8 @@ ElectroMagnBC3D_PML::ElectroMagnBC3D_PML( Params &params, Patch *patch, unsigned
         }
         if (patch->isYmin() ) {//&& i_boundary_ == 2 ) {
             ncells_pml_ymin = params.number_of_pml_cells[1][0];
-            ncells_pml_domain_ymin = ncells_pml_ymin + 1*patch->oversize[1] + nsolver/2;
-            domain_oversize_y = patch->oversize[1] ;
+            ncells_pml_domain_ymin = ncells_pml_ymin + 1*oversize[1] + nsolver/2;
+            domain_oversize_y = oversize[1] ;
         }
         else {
             ncells_pml_ymin = 0;
@@ -72,8 +84,8 @@ ElectroMagnBC3D_PML::ElectroMagnBC3D_PML( Params &params, Patch *patch, unsigned
         }
         if (patch->isYmax() ) {//&& i_boundary_ == 3 ) {
             ncells_pml_ymax = params.number_of_pml_cells[1][1];
-            ncells_pml_domain_ymax = ncells_pml_ymax + 1*patch->oversize[1] + nsolver/2;
-            domain_oversize_y = patch->oversize[1] ;
+            ncells_pml_domain_ymax = ncells_pml_ymax + 1*oversize[1] + nsolver/2;
+            domain_oversize_y = oversize[1] ;
         }
         else {
             ncells_pml_ymax = 0;
@@ -81,8 +93,8 @@ ElectroMagnBC3D_PML::ElectroMagnBC3D_PML( Params &params, Patch *patch, unsigned
         }
         if (patch->isZmin() ) {//&& i_boundary_ == 2 ) {
             ncells_pml_zmin = params.number_of_pml_cells[2][0];
-            ncells_pml_domain_zmin = ncells_pml_zmin + 1*patch->oversize[2] + nsolver/2;
-            domain_oversize_z = patch->oversize[2] ;
+            ncells_pml_domain_zmin = ncells_pml_zmin + 1*oversize[2] + nsolver/2;
+            domain_oversize_z = oversize[2] ;
         }
         else {
             ncells_pml_zmin = 0;
@@ -90,8 +102,8 @@ ElectroMagnBC3D_PML::ElectroMagnBC3D_PML( Params &params, Patch *patch, unsigned
         }
         if (patch->isZmax() ) {//&& i_boundary_ == 3 ) {
             ncells_pml_zmax = params.number_of_pml_cells[2][1];
-            ncells_pml_domain_zmax = ncells_pml_zmax + 1*patch->oversize[2] + nsolver/2;
-            domain_oversize_z = patch->oversize[2] ;
+            ncells_pml_domain_zmax = ncells_pml_zmax + 1*oversize[2] + nsolver/2;
+            domain_oversize_z = oversize[2] ;
         }
         else {
             ncells_pml_zmax = 0;
@@ -99,7 +111,7 @@ ElectroMagnBC3D_PML::ElectroMagnBC3D_PML( Params &params, Patch *patch, unsigned
         }
 
         ncells_pml = params.number_of_pml_cells[iDim][min_or_max];
-        ncells_pml_domain = ncells_pml+1*patch->oversize[iDim] + nsolver/2;
+        ncells_pml_domain = ncells_pml+1*oversize[iDim] + nsolver/2;
 
         // Define min and max idx to exchange
         // the good data f(solver,oversize)
@@ -110,7 +122,7 @@ ElectroMagnBC3D_PML::ElectroMagnBC3D_PML( Params &params, Patch *patch, unsigned
             max2exchange = 2*nsolver/2 ;
             // Solver
             solvermin = nsolver/2 ;
-            solvermax = ncells_pml_domain - patch->oversize[iDim] ;
+            solvermax = ncells_pml_domain - oversize[iDim] ;
         }
         else if (min_or_max==1){
             // if max border : Exchange of data (for domain to pml-domain)
@@ -118,26 +130,39 @@ ElectroMagnBC3D_PML::ElectroMagnBC3D_PML( Params &params, Patch *patch, unsigned
             min2exchange = 1*nsolver/2 ;
             max2exchange = 2*nsolver/2 ;
             // Solver
-            solvermin = patch->oversize[iDim] + nsolver/2 - nsolver/2 + 1 ;
+            solvermin = oversize[iDim] + nsolver/2 - nsolver/2 + 1 ;
             solvermax = ncells_pml_domain-nsolver/2 ;
         }
 
         if (ncells_pml==0){
             ERROR("PML domain have to be >0 cells in thickness");
         }
-        
-        if( iDim == 0 ) {
-            dimPrim = { (unsigned int)ncells_pml_domain, patch->size_[1]+1+2*patch->oversize[1], patch->size_[2]+1+2*patch->oversize[2] };
-        } else if( iDim == 1 ) {
-            ypml_size_in_x = patch->size_[0]+1+2*patch->oversize[0] + ncells_pml_xmin + ncells_pml_xmax;
-            dimPrim = { (unsigned int)ypml_size_in_x, (unsigned int)ncells_pml_domain, patch->size_[2]+1+2*patch->oversize[2] };
-        } else {
-            zpml_size_in_x = patch->size_[0]+1+2*patch->oversize[0] + ncells_pml_xmin + ncells_pml_xmax;
-            zpml_size_in_y = patch->size_[1]+1+2*patch->oversize[1] + ncells_pml_ymin + ncells_pml_ymax;
-            dimPrim = { (unsigned int)zpml_size_in_x, (unsigned int)zpml_size_in_y, (unsigned int)ncells_pml_domain };
+
+        std::vector<unsigned int> dimPrim( params.nDim_field );
+        for( int i=0 ; i<params.nDim_field ; i++ ) {
+            dimPrim[i] = n_space[i]+1+2*oversize[i];
+        }
+        dimPrim[iDim] = ncells_pml_domain;
+        // Redefine the size of the PMLx in x, PMLy in y and PMLz in z (thickness)
+        // -----------------------------------------------------------
+        // ncells_pml_domain = ncells_pml+1*oversize[iDim] + nsolver/2;
+        // -----------------------------------------------------------
+        //  n_space    ->  ncells_pml
+        // +1          -> +nsolver/2
+        // +2*oversize -> +1*oversize
+        if ( iDim==1 ){
+            // If the PML domain in Y is in Xmin or Xmax too, add cell orthogonally
+            dimPrim[iDim-1] += ncells_pml_xmin + ncells_pml_xmax ;
+            ypml_size_in_x = dimPrim[iDim-1] ;
+        }
+        if ( iDim==2 ){
+            dimPrim[0] += ncells_pml_xmin + ncells_pml_xmax ;
+            dimPrim[1] += ncells_pml_ymin + ncells_pml_ymax ;
+            zpml_size_in_x = dimPrim[0] ;
+            zpml_size_in_y = dimPrim[1] ;
         }
 
-        startpml = patch->oversize[iDim]+nsolver/2;
+        startpml = oversize[iDim]+nsolver/2;
 
         int ncells_pml_min[2];
         ncells_pml_min[0] = ncells_pml_xmin;
@@ -146,22 +171,20 @@ ElectroMagnBC3D_PML::ElectroMagnBC3D_PML( Params &params, Patch *patch, unsigned
         ncells_pml_max[0] = ncells_pml_xmax;
         ncells_pml_max[1] = ncells_pml_ymax;
 
-        pml_solver_->setDomainSizeAndCoefficients( iDim, min_or_max, dimPrim, ncells_pml_domain, startpml, ncells_pml_min, ncells_pml_max, patch );
+        pml_solver_->setDomainSizeAndCoefficients( iDim, min_or_max, ncells_pml_domain, startpml, ncells_pml_min, ncells_pml_max, patch );
 
-        std::string si_boundary = std::to_string(i_boundary_);
-
-        Ex_ = new Field3D( dimPrim, 0, false, "Ex_pml"+si_boundary );
-        Ey_ = new Field3D( dimPrim, 1, false, "Ey_pml"+si_boundary );
-        Ez_ = new Field3D( dimPrim, 2, false, "Ez_pml"+si_boundary );
-        Bx_ = new Field3D( dimPrim, 0, true , "Bx_pml"+si_boundary );
-        By_ = new Field3D( dimPrim, 1, true , "By_pml"+si_boundary );
-        Bz_ = new Field3D( dimPrim, 2, true , "Bz_pml"+si_boundary );
-        Dx_ = new Field3D( dimPrim, 0, false, "Dx_pml"+si_boundary );
-        Dy_ = new Field3D( dimPrim, 1, false, "Dy_pml"+si_boundary );
-        Dz_ = new Field3D( dimPrim, 2, false, "Dz_pml"+si_boundary );
-        Hx_ = new Field3D( dimPrim, 0, true , "Hx_pml"+si_boundary );
-        Hy_ = new Field3D( dimPrim, 1, true , "Hy_pml"+si_boundary );
-        Hz_ = new Field3D( dimPrim, 2, true , "Hz_pml"+si_boundary );
+        Ex_ = new Field3D( dimPrim, 0, false, "Ex_pml" );
+        Ey_ = new Field3D( dimPrim, 1, false, "Ey_pml" );
+        Ez_ = new Field3D( dimPrim, 2, false, "Ez_pml" );
+        Bx_ = new Field3D( dimPrim, 0, true, "Bx_pml" );
+        By_ = new Field3D( dimPrim, 1, true, "By_pml" );
+        Bz_ = new Field3D( dimPrim, 2, true, "Bz_pml" );
+        Dx_ = new Field3D( dimPrim, 0, false, "Dx_pml" );
+        Dy_ = new Field3D( dimPrim, 1, false, "Dy_pml" );
+        Dz_ = new Field3D( dimPrim, 2, false, "Dz_pml" );
+        Hx_ = new Field3D( dimPrim, 0, true, "Hx_pml" );
+        Hy_ = new Field3D( dimPrim, 1, true, "Hy_pml" );
+        Hz_ = new Field3D( dimPrim, 2, true, "Hz_pml" );
 
         //Laser parameter
         double pyKx, pyKy, pyKz;
@@ -267,7 +290,7 @@ ElectroMagnBC3D_PML::~ElectroMagnBC3D_PML()
 }
 
 
-void ElectroMagnBC3D_PML::save_fields( Field *, Patch * )
+void ElectroMagnBC3D_PML::save_fields( Field *my_field, Patch *patch )
 {
 }
 
@@ -282,7 +305,8 @@ void ElectroMagnBC3D_PML::disableExternalFields()
 // ---------------------------------------------------------------------------------------------------------------------
 void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch *patch )
 {
-    int iDim = i_boundary_ / 2;
+
+    int iDim = 0*((i_boundary_==0)||(i_boundary_==1))+1*((i_boundary_==2)||(i_boundary_==3))+2*((i_boundary_==4)||(i_boundary_==5));
     int min_or_max = (i_boundary_)%2;
 
     Field3D *Ex_domain = static_cast<Field3D *>( EMfields->Ex_ );
@@ -294,39 +318,37 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
 
     vector<double> pos( 2 );
 
-    if( ! patch->isBoundary( i_boundary_ ) ) return;
-
-    if( i_boundary_ == 0 ) {
+    if( i_boundary_ == 0 && patch->isXmin() ) {
 
         // 1. Solve Maxwell_PML for E-field :
         // As if B-field isn't updated
-        pml_solver_->compute_E_from_D( EMfields, iDim, min_or_max, dimPrim, solvermin, solvermax);
-        //pml_solver_->compute_H_from_B( EMfields, iDim, min_or_max, dimPrim, solvermin, solvermax);
+        pml_solver_->compute_E_from_D( EMfields, iDim, min_or_max, solvermin, solvermax);
+        //pml_solver_->compute_H_from_B( EMfields, iDim, min_or_max, solvermin, solvermax);
 
         // 2. Exchange field PML <- Domain
         for ( int i=min2exchange ; i<max2exchange ; i++ ) {
             // MESSAGE("Copy PML < Domain");
             // MESSAGE(ncells_pml_domain-domain_oversize_x-nsolver/2+i<<"<"<<i);
-            for( unsigned int j = 0 ; j<n_d[1] ; j++ ) {
-                for( unsigned int k = 0 ; k<n_d[2] ; k++ ) {
+            for ( int j=0 ; j<n_d[1] ; j++ ) {
+                for ( int k=0 ; k<n_d[2] ; k++ ) {
                     (*Hx_)(ncells_pml_domain-domain_oversize_x-nsolver/2+i,j,k) = (*Bx_domain)(i,j,k);
                     (*Bx_)(ncells_pml_domain-domain_oversize_x-nsolver/2+i,j,k) = (*Bx_domain)(i,j,k);
                 }
-                for( unsigned int k = 0 ; k<n_p[2] ; k++ ) {
+                for ( int k=0 ; k<n_p[2] ; k++ ) {
                     (*Ey_)(ncells_pml_domain-domain_oversize_x-nsolver/2+i,j,k) = (*Ey_domain)(i,j,k);
                     (*Dy_)(ncells_pml_domain-domain_oversize_x-nsolver/2+i,j,k) = (*Ey_domain)(i,j,k);
                     (*Hz_)(ncells_pml_domain-domain_oversize_x-nsolver/2+i,j,k) = (*Bz_domain)(i,j,k);
                     (*Bz_)(ncells_pml_domain-domain_oversize_x-nsolver/2+i,j,k) = (*Bz_domain)(i,j,k);
                 }
             }
-            for( unsigned int j = 0 ; j<n_p[1] ; j++ ) {
-                for( unsigned int k = 0 ; k<n_d[2] ; k++ ) {
+            for ( int j=0 ; j<n_p[1] ; j++ ) {
+                for ( int k=0 ; k<n_d[2] ; k++ ) {
                     (*Ez_)(ncells_pml_domain-domain_oversize_x-nsolver/2+i,j,k) = (*Ez_domain)(i,j,k);
                     (*Dz_)(ncells_pml_domain-domain_oversize_x-nsolver/2+i,j,k) = (*Ez_domain)(i,j,k);
                     (*Hy_)(ncells_pml_domain-domain_oversize_x-nsolver/2+i,j,k) = (*By_domain)(i,j,k);
                     (*By_)(ncells_pml_domain-domain_oversize_x-nsolver/2+i,j,k) = (*By_domain)(i,j,k);
                 }
-                for( unsigned int k = 0 ; k<n_p[2] ; k++ ) {
+                for ( int k=0 ; k<n_p[2] ; k++ ) {
                     (*Ex_)(ncells_pml_domain-domain_oversize_x-nsolver/2+i,j,k) = (*Ex_domain)(i,j,k);
                     (*Dx_)(ncells_pml_domain-domain_oversize_x-nsolver/2+i,j,k) = (*Ex_domain)(i,j,k);
                 }
@@ -334,8 +356,8 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
         }
 
         // 3. Solve Maxwell_PML for B-field :
-        //pml_solver_->compute_E_from_D( EMfields, iDim, min_or_max, dimPrim, solvermin, solvermax);
-        pml_solver_->compute_H_from_B( EMfields, iDim, min_or_max, dimPrim, solvermin, solvermax);
+        //pml_solver_->compute_E_from_D( EMfields, iDim, min_or_max, solvermin, solvermax);
+        pml_solver_->compute_H_from_B( EMfields, iDim, min_or_max, solvermin, solvermax);
 
         //Injecting a laser
         vector<double> by( n_p[1]*n_d[2], 0. );
@@ -369,67 +391,67 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
         // 4. Exchange PML -> Domain
         // Primals in x-direction
         for (int i=0 ; i < nsolver/2 ; i++){
-            for( unsigned int j = 0 ; j<n_p[1] ; j++ ) {
-                for( unsigned int k = 0 ; k<n_d[2] ; k++ ) {
+            for ( int j=0 ; j<n_p[1] ; j++ ) {
+                for ( int k=0 ; k<n_d[2] ; k++ ) {
                     (*Ez_domain)(i,j,k) = (*Ez_)(ncells_pml_domain-domain_oversize_x-nsolver/2+i,j,k);
                 }
             }
-            for( unsigned int j = 0 ; j<n_d[1] ; j++ ) {
-                for( unsigned int k = 0 ; k<n_p[2] ; k++ ) {
+            for ( int j=0 ; j<n_d[1] ; j++ ) {
+                for ( int k=0 ; k<n_p[2] ; k++ ) {
                     (*Ey_domain)(i,j,k) = (*Ey_)(ncells_pml_domain-domain_oversize_x-nsolver/2+i,j,k);
                 }
-                for( unsigned int k = 0 ; k<n_d[2] ; k++ ) {
+                for ( int k=0 ; k<n_d[2] ; k++ ) {
                     (*Bx_domain)(i,j,k) = (*Hx_)(ncells_pml_domain-domain_oversize_x-nsolver/2+i,j,k);
                 }
             }
         }
         // Duals in x-direction
         for (int i=0 ; i < nsolver/2 ; i++){
-            for( unsigned int j = 0 ; j<n_p[1] ; j++ ) {
-                for( unsigned int k = 0 ; k<n_p[2] ; k++ ) {
+            for ( int j=0 ; j<n_p[1] ; j++ ) {
+                for ( int k=0 ; k<n_p[2] ; k++ ) {
                     (*Ex_domain)(i,j,k) = (*Ex_)(ncells_pml_domain-domain_oversize_x-nsolver/2+i,j,k);
                 }
-                for( unsigned int k = 0 ; k<n_d[2] ; k++ ) {
+                for ( int k=0 ; k<n_d[2] ; k++ ) {
                     (*By_domain)(i,j,k) = (*Hy_)(ncells_pml_domain-domain_oversize_x-nsolver/2+i,j,k);
                 }
             }
-            for( unsigned int j = 0 ; j<n_d[1] ; j++ ) {
-                for( unsigned int k = 0 ; k<n_p[2] ; k++ ) {
+            for ( int j=0 ; j<n_d[1] ; j++ ) {
+                for ( int k=0 ; k<n_p[2] ; k++ ) {
                     (*Bz_domain)(i,j,k) = (*Hz_)(ncells_pml_domain-domain_oversize_x-nsolver/2+i,j,k);
                 }
             }
         }
     }
 
-    else if( i_boundary_ == 1 ) {
+    else if( i_boundary_ == 1 && patch->isXmax() ) {
 
         // 1. Solve Maxwell_PML for E-field :
         // As if B-field isn't updated
-        pml_solver_->compute_E_from_D( EMfields, iDim, min_or_max, dimPrim, solvermin, solvermax);
-        //pml_solver_->compute_H_from_B( EMfields, iDim, min_or_max, dimPrim, solvermin, solvermax);
+        pml_solver_->compute_E_from_D( EMfields, iDim, min_or_max, solvermin, solvermax);
+        //pml_solver_->compute_H_from_B( EMfields, iDim, min_or_max, solvermin, solvermax);
 
         // 2. Exchange field Domain -> PML
         for ( int i=min2exchange ; i<max2exchange ; i++ ) {
-            for( unsigned int j = 0 ; j<n_d[1] ; j++ ) {
-                for( unsigned int k = 0 ; k<n_d[2] ; k++ ) {
+            for ( int j=0 ; j<n_d[1] ; j++ ) {
+                for ( int k=0 ; k<n_d[2] ; k++ ) {
                     (*Hx_)(domain_oversize_x+nsolver/2-i,j,k) = (*Bx_domain)(n_p[0]-i,j,k);
                     (*Bx_)(domain_oversize_x+nsolver/2-i,j,k) = (*Bx_domain)(n_p[0]-i,j,k);
                 }
-                for( unsigned int k = 0 ; k<n_p[2] ; k++ ) {
+                for ( int k=0 ; k<n_p[2] ; k++ ) {
                     (*Ey_)(domain_oversize_x+nsolver/2-i,j,k) = (*Ey_domain)(n_p[0]-i,j,k);
                     (*Dy_)(domain_oversize_x+nsolver/2-i,j,k) = (*Ey_domain)(n_p[0]-i,j,k);
                     (*Hz_)(domain_oversize_x+nsolver/2-i,j,k) = (*Bz_domain)(n_p[0]-i,j,k);
                     (*Bz_)(domain_oversize_x+nsolver/2-i,j,k) = (*Bz_domain)(n_p[0]-i,j,k);
                 }
             }
-            for( unsigned int j = 0 ; j<n_p[1] ; j++ ) {
-                for( unsigned int k = 0 ; k<n_d[2] ; k++ ) {
+            for ( int j=0 ; j<n_p[1] ; j++ ) {
+                for ( int k=0 ; k<n_d[2] ; k++ ) {
                     (*Ez_)(domain_oversize_x+nsolver/2-i,j,k) = (*Ez_domain)(n_p[0]-i,j,k);
                     (*Dz_)(domain_oversize_x+nsolver/2-i,j,k) = (*Ez_domain)(n_p[0]-i,j,k);
                     (*Hy_)(domain_oversize_x+nsolver/2-i,j,k) = (*By_domain)(n_p[0]-i,j,k);
                     (*By_)(domain_oversize_x+nsolver/2-i,j,k) = (*By_domain)(n_p[0]-i,j,k);
                 }
-                for( unsigned int k = 0 ; k<n_p[2] ; k++ ) {
+                for ( int k=0 ; k<n_p[2] ; k++ ) {
                     (*Ex_)(domain_oversize_x+nsolver/2-i,j,k) = (*Ex_domain)(n_p[0]-i,j,k);
                     (*Dx_)(domain_oversize_x+nsolver/2-i,j,k) = (*Ex_domain)(n_p[0]-i,j,k);
                 }
@@ -437,8 +459,8 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
         }
 
         // 3. Solve Maxwell_PML for B-field :
-        //pml_solver_->compute_E_from_D( EMfields, iDim, min_or_max, dimPrim, solvermin, solvermax);
-        pml_solver_->compute_H_from_B( EMfields, iDim, min_or_max, dimPrim, solvermin, solvermax);
+        //pml_solver_->compute_E_from_D( EMfields, iDim, min_or_max, solvermin, solvermax);
+        pml_solver_->compute_H_from_B( EMfields, iDim, min_or_max, solvermin, solvermax);
 
         //Injecting a laser
         vector<double> by( n_p[1]*n_d[2], 0. );
@@ -472,38 +494,38 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
         // 4. Exchange Domain -> PML
         // Primals in x-direction
         for (int i=0 ; i < nsolver/2-1 ; i++){
-            for( unsigned int j = 0 ; j<n_p[1] ; j++ ) {
-                for( unsigned int k = 0 ; k<n_d[2] ; k++ ) {
+            for ( int j=0 ; j<n_p[1] ; j++ ) {
+                for ( int k=0 ; k<n_d[2] ; k++ ) {
                     (*Ez_domain)(n_p[0]-1-i,j,k) = (*Ez_)(domain_oversize_x+nsolver/2-1-i,j,k);
                 }
             }
-            for( unsigned int j = 0 ; j<n_d[1] ; j++ ) {
-                for( unsigned int k = 0 ; k<n_p[2] ; k++ ) {
+            for ( int j=0 ; j<n_d[1] ; j++ ) {
+                for ( int k=0 ; k<n_p[2] ; k++ ) {
                     (*Ey_domain)(n_p[0]-1-i,j,k) = (*Ey_)(domain_oversize_x+nsolver/2-1-i,j,k);
                 }
-                for( unsigned int k = 0 ; k<n_d[2] ; k++ ) {
+                for ( int k=0 ; k<n_d[2] ; k++ ) {
                     (*Bx_domain)(n_p[0]-1-i,j,k) = (*Hx_)(domain_oversize_x+nsolver/2-1-i,j,k);
                 }
             }
         }
         // Duals in x-direction
         for (int i=0 ; i < nsolver/2 ; i++){
-            for( unsigned int j = 0 ; j<n_p[1] ; j++ ) {
-                for( unsigned int k = 0 ; k<n_p[2] ; k++ ) {
+            for ( int j=0 ; j<n_p[1] ; j++ ) {
+                for ( int k=0 ; k<n_p[2] ; k++ ) {
                     (*Ex_domain)(n_d[0]-1-i,j,k) = (*Ex_)(domain_oversize_x+nsolver/2-i,j,k);
                 }
-                for( unsigned int k = 0 ; k<n_d[2] ; k++ ) {
+                for ( int k=0 ; k<n_d[2] ; k++ ) {
                     (*By_domain)(n_d[0]-1-i,j,k) = (*Hy_)(domain_oversize_x+nsolver/2-i,j,k);
                 }
             }
-            for( unsigned int j = 0 ; j<n_d[1] ; j++ ) {
-                for( unsigned int k = 0 ; k<n_p[2] ; k++ ) {
+            for ( int j=0 ; j<n_d[1] ; j++ ) {
+                for ( int k=0 ; k<n_p[2] ; k++ ) {
                     (*Bz_domain)(n_d[0]-1-i,j,k) = (*Hz_)(domain_oversize_x+nsolver/2-i,j,k);
                 }
             }
         }
     }
-    else if( i_boundary_ == 2 ) {
+    else if( i_boundary_ == 2 && patch->isYmin() ) {
 
         ElectroMagnBC3D_PML* pml_fields_xmin = NULL ;
         ElectroMagnBC3D_PML* pml_fields_xmax = NULL ;
@@ -573,8 +595,8 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
 
         // 1. Solve Maxwell_PML for E-field :
         // As if B-field isn't updated
-        pml_solver_->compute_E_from_D( EMfields, iDim, min_or_max, dimPrim, solvermin, solvermax);
-        //pml_solver_->compute_H_from_B( EMfields, iDim, min_or_max, dimPrim, solvermin, solvermax);
+        pml_solver_->compute_E_from_D( EMfields, iDim, min_or_max, solvermin, solvermax);
+        //pml_solver_->compute_H_from_B( EMfields, iDim, min_or_max, solvermin, solvermax);
 
         // 2. Exchange field PML <- Domain
         for ( int j=min2exchange ; j<max2exchange ; j++ ) {
@@ -584,7 +606,7 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
                         int idx_start = 0;
                         // Les qtes i-Primals commencent a 0
                         // Toutes les qtes i-Duals 0
-                        for( unsigned int k = 0 ; k<n_p[2] ; k++ ) {
+                        for ( int k=0 ; k<n_p[2] ; k++ ) {
                             // i-Primals
                             (*Ey_)(idx_start+i,ncells_pml_domain-domain_oversize_y-nsolver/2+j,k) = (*Ey_pml_xmin)(i,j,k);
                             (*Dy_)(idx_start+i,ncells_pml_domain-domain_oversize_y-nsolver/2+j,k) = (*Dy_pml_xmin)(i,j,k);
@@ -594,7 +616,7 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
                             (*Hz_)(idx_start+i,ncells_pml_domain-domain_oversize_y-nsolver/2+j,k) = (*Hz_pml_xmin)(i,j,k);
                             (*Bz_)(idx_start+i,ncells_pml_domain-domain_oversize_y-nsolver/2+j,k) = (*Bz_pml_xmin)(i,j,k);
                         }
-                        for( unsigned int k = 0 ; k<n_d[2] ; k++ ) {
+                        for ( int k=0 ; k<n_d[2] ; k++ ) {
                             // i-Primals
                             (*Ez_)(idx_start+i,ncells_pml_domain-domain_oversize_y-nsolver/2+j,k) = (*Ez_pml_xmin)(i,j,k);
                             (*Dz_)(idx_start+i,ncells_pml_domain-domain_oversize_y-nsolver/2+j,k) = (*Dz_pml_xmin)(i,j,k);
@@ -607,26 +629,26 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
                     }
                 }
             }
-            for( unsigned int i = 0 ; i<n_p[0] ; i++ ) {
+            for ( int i=0 ; i<n_p[0] ; i++ ) {
                 int idx_start = ncells_pml_xmin;
-                for( unsigned int k = 0 ; k<n_p[2] ; k++ ) {
+                for ( int k=0 ; k<n_p[2] ; k++ ) {
                     (*Ey_)(idx_start+i,ncells_pml_domain-domain_oversize_y-nsolver/2+j,k) = (*Ey_domain)(i,j,k);
                     (*Dy_)(idx_start+i,ncells_pml_domain-domain_oversize_y-nsolver/2+j,k) = (*Ey_domain)(i,j,k);
                 }
-                for( unsigned int k = 0 ; k<n_d[2] ; k++ ) {
+                for ( int k=0 ; k<n_d[2] ; k++ ) {
                     (*Hx_)(idx_start+i,ncells_pml_domain-domain_oversize_y-nsolver/2+j,k) = (*Bx_domain)(i,j,k);
                     (*Bx_)(idx_start+i,ncells_pml_domain-domain_oversize_y-nsolver/2+j,k) = (*Bx_domain)(i,j,k);
                     (*Ez_)(idx_start+i,ncells_pml_domain-domain_oversize_y-nsolver/2+j,k) = (*Ez_domain)(i,j,k);
                     (*Dz_)(idx_start+i,ncells_pml_domain-domain_oversize_y-nsolver/2+j,k) = (*Ez_domain)(i,j,k);
                 }
             }
-            for( unsigned int i = 0 ; i<n_d[0] ; i++ ) {
+            for ( int i=0 ; i<n_d[0] ; i++ ) {
                 int idx_start = ncells_pml_xmin;
-                for( unsigned int k = 0 ; k<n_p[2] ; k++ ) {
+                for ( int k=0 ; k<n_p[2] ; k++ ) {
                     (*Ex_)(idx_start+i,ncells_pml_domain-domain_oversize_y-nsolver/2+j,k) = (*Ex_domain)(i,j,k);
                     (*Dx_)(idx_start+i,ncells_pml_domain-domain_oversize_y-nsolver/2+j,k) = (*Ex_domain)(i,j,k);
                 }
-                for( unsigned int k = 0 ; k<n_d[2] ; k++ ) {
+                for ( int k=0 ; k<n_d[2] ; k++ ) {
                     (*Hy_)(idx_start+i,ncells_pml_domain-domain_oversize_y-nsolver/2+j,k) = (*By_domain)(i,j,k);
                     (*By_)(idx_start+i,ncells_pml_domain-domain_oversize_y-nsolver/2+j,k) = (*By_domain)(i,j,k);
                     (*Hz_)(idx_start+i,ncells_pml_domain-domain_oversize_y-nsolver/2+j,k) = (*Bz_domain)(i,j,k);
@@ -639,7 +661,7 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
                         int idx_start = (ypml_size_in_x-1)-(ncells_pml_xmax-1) ;
                         // Les qtes i-Primals commencent a (ypml_size_in_x+1)-ncells_pml_xmax
                         // Toutes les qtes i-Duals commence a idx_start+1
-                        for( unsigned int k = 0 ; k<n_p[2] ; k++ ) {
+                        for ( int k=0 ; k<n_p[2] ; k++ ) {
                             // i-Primals
                             (*Ey_)(idx_start+i,ncells_pml_domain-domain_oversize_y-nsolver/2+j,k) = (*Ey_pml_xmax)(domain_oversize_x+nsolver/2+i,j,k);
                             (*Dy_)(idx_start+i,ncells_pml_domain-domain_oversize_y-nsolver/2+j,k) = (*Dy_pml_xmax)(domain_oversize_x+nsolver/2+i,j,k);
@@ -649,7 +671,7 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
                             (*Hz_)(idx_start+1+i,ncells_pml_domain-domain_oversize_y-nsolver/2+j,k) = (*Hz_pml_xmax)(domain_oversize_x+nsolver/2+1+i,j,k);
                             (*Bz_)(idx_start+1+i,ncells_pml_domain-domain_oversize_y-nsolver/2+j,k) = (*Bz_pml_xmax)(domain_oversize_x+nsolver/2+1+i,j,k);
                         }
-                        for( unsigned int k = 0 ; k<n_d[2] ; k++ ) {
+                        for ( int k=0 ; k<n_d[2] ; k++ ) {
                             // i-Primals
                             (*Ez_)(idx_start+i,ncells_pml_domain-domain_oversize_y-nsolver/2+j,k) = (*Ez_pml_xmax)(domain_oversize_x+nsolver/2+i,j,k);
                             (*Dz_)(idx_start+i,ncells_pml_domain-domain_oversize_y-nsolver/2+j,k) = (*Dz_pml_xmax)(domain_oversize_x+nsolver/2+i,j,k);
@@ -665,8 +687,8 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
         }
 
         // 3. Solve Maxwell_PML for B-field :
-        //pml_solver_->compute_E_from_D( EMfields, iDim, min_or_max, dimPrim, solvermin, solvermax);
-        pml_solver_->compute_H_from_B( EMfields, iDim, min_or_max, dimPrim, solvermin, solvermax);
+        //pml_solver_->compute_E_from_D( EMfields, iDim, min_or_max, solvermin, solvermax);
+        pml_solver_->compute_H_from_B( EMfields, iDim, min_or_max, solvermin, solvermax);
 
         //Injecting a laser
         vector<double> bx( n_p[0]*n_d[2], 0. );
@@ -700,36 +722,36 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
         // 4. Exchange PML -> Domain
         // Primals in y-direction
         for (int j=0 ; j < nsolver/2 ; j++){
-            for( unsigned int i = 0 ; i<n_p[0] ; i++ ) {
+            for ( int i=0 ; i<n_p[0] ; i++ ) {
                 int idx_start = ncells_pml_xmin;
-                for( unsigned int k = 0 ; k<n_d[2] ; k++ ) {
+                for ( int k=0 ; k<n_d[2] ; k++ ) {
                     (*Ez_domain)(i,j,k) = (*Ez_)(idx_start+i,ncells_pml_domain-domain_oversize_x-nsolver/2+j,k);
                 }
             }
-            for( unsigned int i = 0 ; i<n_d[0] ; i++ ) {
+            for ( int i=0 ; i<n_d[0] ; i++ ) {
                 int idx_start = ncells_pml_xmin;
-                for( unsigned int k = 0 ; k<n_p[2] ; k++ ) {
+                for ( int k=0 ; k<n_p[2] ; k++ ) {
                     (*Ex_domain)(i,j,k) = (*Ex_)(idx_start+i,ncells_pml_domain-domain_oversize_x-nsolver/2+j,k);
                 }
-                for( unsigned int k = 0 ; k<n_d[2] ; k++ ) {
+                for ( int k=0 ; k<n_d[2] ; k++ ) {
                     (*By_domain)(i,j,k) = (*Hy_)(idx_start+i,ncells_pml_domain-domain_oversize_x-nsolver/2+j,k);
                 }
             }
         }
         // Duals in y-direction
         for (int j=0 ; j < nsolver/2 ; j++){
-            for( unsigned int i = 0 ; i<n_p[0] ; i++ ) {
+            for ( int i=0 ; i<n_p[0] ; i++ ) {
                 int idx_start = ncells_pml_xmin;
-                for( unsigned int k = 0 ; k<n_p[2] ; k++ ) {
+                for ( int k=0 ; k<n_p[2] ; k++ ) {
                     (*Ey_domain)(i,j,k) = (*Ey_)(idx_start+i,ncells_pml_domain-domain_oversize_x-nsolver/2+j,k);
                 }
-                for( unsigned int k = 0 ; k<n_d[2] ; k++ ) {
+                for ( int k=0 ; k<n_d[2] ; k++ ) {
                     (*Bx_domain)(i,j,k) = (*Hx_)(idx_start+i,ncells_pml_domain-domain_oversize_x-nsolver/2+j,k);
                 }
             }
-            for( unsigned int i = 0 ; i<n_d[0] ; i++ ) {
+            for ( int i=0 ; i<n_d[0] ; i++ ) {
                 int idx_start = ncells_pml_xmin;
-                for( unsigned int k = 0 ; k<n_p[2] ; k++ ) {
+                for ( int k=0 ; k<n_p[2] ; k++ ) {
                     (*Bz_domain)(i,j,k) = (*Hz_)(idx_start+i,ncells_pml_domain-domain_oversize_x-nsolver/2+j,k);
                 }
             }
@@ -742,12 +764,12 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
                 if(ncells_pml_xmin != 0){
                     for ( int i=0 ; i<ncells_pml_domain_xmin ; i++ ) {
                         int idx_start = 0;
-                        for( unsigned int k = 0 ; k<n_p[2] ; k++ ) {
+                        for ( int k=0 ; k<n_p[2] ; k++ ) {
                             // i-Duals
                             (*Ex_pml_xmin)(i,j,k) = (*Ex_)(idx_start+i,ncells_pml_domain-domain_oversize_x-nsolver/2+j,k);
                             (*Dx_pml_xmin)(i,j,k) = (*Dx_)(idx_start+i,ncells_pml_domain-domain_oversize_x-nsolver/2+j,k);
                         }
-                        for( unsigned int k = 0 ; k<n_d[2] ; k++ ) {
+                        for ( int k=0 ; k<n_d[2] ; k++ ) {
                             // i-Primals
                             (*Ez_pml_xmin)(i,j,k) = (*Ez_)(idx_start+i,ncells_pml_domain-domain_oversize_x-nsolver/2+j,k);
                             (*Dz_pml_xmin)(i,j,k) = (*Dz_)(idx_start+i,ncells_pml_domain-domain_oversize_x-nsolver/2+j,k);
@@ -765,7 +787,7 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
                 if(ncells_pml_xmin != 0){
                     for ( int i=0 ; i<ncells_pml_domain_xmin ; i++ ) {
                         int idx_start = 0;
-                        for( unsigned int k = 0 ; k<n_p[2] ; k++ ) {
+                        for ( int k=0 ; k<n_p[2] ; k++ ) {
                             // i-Primals
                             (*Ey_pml_xmin)(i,j,k) = (*Ey_)(idx_start+i,ncells_pml_domain-domain_oversize_x-nsolver/2+j,k);
                             (*Dy_pml_xmin)(i,j,k) = (*Dy_)(idx_start+i,ncells_pml_domain-domain_oversize_x-nsolver/2+j,k);
@@ -773,7 +795,7 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
                             (*Hz_pml_xmin)(i,j,k) = (*Hz_)(idx_start+i,ncells_pml_domain-domain_oversize_x-nsolver/2+j,k);
                             (*Bz_pml_xmin)(i,j,k) = (*Bz_)(idx_start+i,ncells_pml_domain-domain_oversize_x-nsolver/2+j,k);
                         }
-                        for( unsigned int k = 0 ; k<n_d[2] ; k++ ) {
+                        for ( int k=0 ; k<n_d[2] ; k++ ) {
                             // i-Primals
                             (*Hx_pml_xmin)(i,j,k) = (*Hx_)(idx_start+i,ncells_pml_domain-domain_oversize_x-nsolver/2+j,k);
                             (*Bx_pml_xmin)(i,j,k) = (*Bx_)(idx_start+i,ncells_pml_domain-domain_oversize_x-nsolver/2+j,k);
@@ -790,14 +812,14 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
                 if(ncells_pml_xmax != 0){
                     for ( int i=0 ; i<ncells_pml_domain_xmax ; i++ ) {
                         int idx_start = ypml_size_in_x-ncells_pml_domain_xmax ;
-                        for( unsigned int k = 0 ; k<n_p[2] ; k++ ) {
+                        for ( int k=0 ; k<n_p[2] ; k++ ) {
                             // i-Primals
                             // Nothing
                             // i-Dual
                             (*Ex_pml_xmax)(i,j,k) = (*Ex_)(idx_start+i,ncells_pml_domain-domain_oversize_x-nsolver/2+j,k);
                             (*Dx_pml_xmax)(i,j,k) = (*Dx_)(idx_start+i,ncells_pml_domain-domain_oversize_x-nsolver/2+j,k);
                         }
-                        for( unsigned int k = 0 ; k<n_d[2] ; k++ ) {
+                        for ( int k=0 ; k<n_d[2] ; k++ ) {
                             // i-Primals
                             (*Ez_pml_xmax)(i,j,k) = (*Ez_)(idx_start+i,ncells_pml_domain-domain_oversize_x-nsolver/2+j,k);
                             (*Dz_pml_xmax)(i,j,k) = (*Dz_)(idx_start+i,ncells_pml_domain-domain_oversize_x-nsolver/2+j,k);
@@ -815,7 +837,7 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
                 if(ncells_pml_xmax != 0){
                     for ( int i=0 ; i<ncells_pml_domain_xmax ; i++ ) {
                         int idx_start = ypml_size_in_x-ncells_pml_domain_xmax ;
-                        for( unsigned int k = 0 ; k<n_p[2] ; k++ ) {
+                        for ( int k=0 ; k<n_p[2] ; k++ ) {
                             // i-Primals
                             (*Ey_pml_xmax)(i,j,k) = (*Ey_)(idx_start+i,ncells_pml_domain-domain_oversize_x-nsolver/2+j,k);
                             (*Dy_pml_xmax)(i,j,k) = (*Dy_)(idx_start+i,ncells_pml_domain-domain_oversize_x-nsolver/2+j,k);
@@ -823,7 +845,7 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
                             (*Hz_pml_xmax)(i,j,k) = (*Hz_)(idx_start+i,ncells_pml_domain-domain_oversize_x-nsolver/2+j,k);
                             (*Bz_pml_xmax)(i,j,k) = (*Bz_)(idx_start+i,ncells_pml_domain-domain_oversize_x-nsolver/2+j,k);
                         }
-                        for( unsigned int k = 0 ; k<n_d[2] ; k++ ) {
+                        for ( int k=0 ; k<n_d[2] ; k++ ) {
                             // i-Primals
                             (*Hx_pml_xmax)(i,j,k) = (*Hx_)(idx_start+i,ncells_pml_domain-domain_oversize_x-nsolver/2+j,k);
                             (*Bx_pml_xmax)(i,j,k) = (*Bx_)(idx_start+i,ncells_pml_domain-domain_oversize_x-nsolver/2+j,k);
@@ -833,7 +855,7 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
             }
         }
     }
-    else if( i_boundary_ == 3 ) {
+    else if( i_boundary_ == 3 && patch->isYmax() ) {
 
         ElectroMagnBC3D_PML* pml_fields_xmin = NULL ;
         ElectroMagnBC3D_PML* pml_fields_xmax = NULL ;
@@ -903,8 +925,8 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
 
         // 1. Solve Maxwell_PML for E-field :
         // As if B-field isn't updated
-        pml_solver_->compute_E_from_D( EMfields, iDim, min_or_max, dimPrim, solvermin, solvermax);
-        //pml_solver_->compute_H_from_B( EMfields, iDim, min_or_max, dimPrim, solvermin, solvermax);
+        pml_solver_->compute_E_from_D( EMfields, iDim, min_or_max, solvermin, solvermax);
+        //pml_solver_->compute_H_from_B( EMfields, iDim, min_or_max, solvermin, solvermax);
 
         // 2. Exchange field PML <- Domain
         for ( int j=min2exchange ; j<max2exchange ; j++ ) {
@@ -914,7 +936,7 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
                         int idx_start = 0;
                         // Les qtes i-Primals commencent a 0
                         // Toutes les qtes i-Duals 0
-                        for( unsigned int k = 0 ; k<n_p[2] ; k++ ) {
+                        for ( int k=0 ; k<n_p[2] ; k++ ) {
                             // Les qtes i-Primals
                             (*Ey_)(idx_start+i,domain_oversize_y+nsolver/2-j,k) = (*Ey_pml_xmin)(i,n_p[1]-j,k);
                             (*Dy_)(idx_start+i,domain_oversize_y+nsolver/2-j,k) = (*Dy_pml_xmin)(i,n_p[1]-j,k);
@@ -924,7 +946,7 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
                             (*Hz_)(idx_start+i,domain_oversize_y+nsolver/2-j,k) = (*Hz_pml_xmin)(i,n_p[1]-j,k);
                             (*Bz_)(idx_start+i,domain_oversize_y+nsolver/2-j,k) = (*Bz_pml_xmin)(i,n_p[1]-j,k);
                         }
-                        for( unsigned int k = 0 ; k<n_d[2] ; k++ ) {
+                        for ( int k=0 ; k<n_d[2] ; k++ ) {
                             // Les qtes i-Primals
                             (*Ez_)(idx_start+i,domain_oversize_y+nsolver/2-j,k) = (*Ez_pml_xmin)(i,n_p[1]-j,k);
                             (*Dz_)(idx_start+i,domain_oversize_y+nsolver/2-j,k) = (*Dz_pml_xmin)(i,n_p[1]-j,k);
@@ -937,28 +959,28 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
                     }
                 }
             }
-            for( unsigned int i = 0 ; i<n_p[0] ; i++ ) {
+            for ( int i=0 ; i<n_p[0] ; i++ ) {
                 int idx_start = ncells_pml_xmin;
-                for( unsigned int k = 0 ; k<n_p[2] ; k++ ) {
+                for ( int k=0 ; k<n_p[2] ; k++ ) {
                     (*Ey_)(idx_start+i,domain_oversize_y+nsolver/2-j,k) = (*Ey_domain)(i,n_p[1]-j,k);
                     (*Dy_)(idx_start+i,domain_oversize_y+nsolver/2-j,k) = (*Ey_domain)(i,n_p[1]-j,k);
                 }
-                for( unsigned int k = 0 ; k<n_d[2] ; k++ ) {
+                for ( int k=0 ; k<n_d[2] ; k++ ) {
                     (*Hx_)(idx_start+i,domain_oversize_y+nsolver/2-j,k) = (*Bx_domain)(i,n_p[1]-j,k);
                     (*Bx_)(idx_start+i,domain_oversize_y+nsolver/2-j,k) = (*Bx_domain)(i,n_p[1]-j,k);
                     (*Ez_)(idx_start+i,domain_oversize_y+nsolver/2-j,k) = (*Ez_domain)(i,n_p[1]-j,k);
                     (*Dz_)(idx_start+i,domain_oversize_y+nsolver/2-j,k) = (*Ez_domain)(i,n_p[1]-j,k);
                 }
             }
-            for( unsigned int i = 0 ; i<n_d[0] ; i++ ) {
+            for ( int i=0 ; i<n_d[0] ; i++ ) {
                 int idx_start = ncells_pml_xmin;
-                for( unsigned int k = 0 ; k<n_p[2] ; k++ ) {
+                for ( int k=0 ; k<n_p[2] ; k++ ) {
                     (*Ex_)(idx_start+i,domain_oversize_y+nsolver/2-j,k) = (*Ex_domain)(i,n_p[1]-j,k);
                     (*Dx_)(idx_start+i,domain_oversize_y+nsolver/2-j,k) = (*Ex_domain)(i,n_p[1]-j,k);
                     (*Hz_)(idx_start+i,domain_oversize_y+nsolver/2-j,k) = (*Bz_domain)(i,n_p[1]-j,k);
                     (*Bz_)(idx_start+i,domain_oversize_y+nsolver/2-j,k) = (*Bz_domain)(i,n_p[1]-j,k);
                 }
-                for( unsigned int k = 0 ; k<n_d[2] ; k++ ) {
+                for ( int k=0 ; k<n_d[2] ; k++ ) {
                     (*Hy_)(idx_start+i,domain_oversize_y+nsolver/2-j,k) = (*By_domain)(i,n_p[1]-j,k);
                     (*By_)(idx_start+i,domain_oversize_y+nsolver/2-j,k) = (*By_domain)(i,n_p[1]-j,k);
                 }
@@ -969,7 +991,7 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
                         int idx_start = (ypml_size_in_x-1)-(ncells_pml_xmax-1) ;
                         // Les qtes i-Primals commencent a (ypml_size_in_x+1)-ncells_pml_xmax
                         // Toutes les qtes i-Duals commence a idx_start + 1
-                        for( unsigned int k = 0 ; k<n_p[2] ; k++ ) {
+                        for ( int k=0 ; k<n_p[2] ; k++ ) {
                             // i-Primals
                             (*Ey_)(idx_start+i,domain_oversize_y+nsolver/2-j,k) = (*Ey_pml_xmax)(domain_oversize_x+nsolver/2+i,n_p[1]-j,k);
                             (*Dy_)(idx_start+i,domain_oversize_y+nsolver/2-j,k) = (*Dy_pml_xmax)(domain_oversize_x+nsolver/2+i,n_p[1]-j,k);
@@ -979,7 +1001,7 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
                             (*Hz_)(idx_start+1+i,domain_oversize_y+nsolver/2-j,k) = (*Hz_pml_xmax)(domain_oversize_x+nsolver/2+1+i,n_p[1]-j,k);
                             (*Bz_)(idx_start+1+i,domain_oversize_y+nsolver/2-j,k) = (*Bz_pml_xmax)(domain_oversize_x+nsolver/2+1+i,n_p[1]-j,k);
                         }
-                        for( unsigned int k = 0 ; k<n_d[2] ; k++ ) {
+                        for ( int k=0 ; k<n_d[2] ; k++ ) {
                             // i-Primals
                             (*Bx_)(idx_start+i,domain_oversize_y+nsolver/2-j,k) = (*Bx_pml_xmax)(domain_oversize_x+nsolver/2+i,n_p[1]-j,k);
                             (*Hx_)(idx_start+i,domain_oversize_y+nsolver/2-j,k) = (*Hx_pml_xmax)(domain_oversize_x+nsolver/2+i,n_p[1]-j,k);
@@ -995,8 +1017,8 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
         }
 
         // 3. Solve Maxwell_PML for B-field :
-        //pml_solver_->compute_E_from_D( EMfields, iDim, min_or_max, dimPrim, solvermin, solvermax);
-        pml_solver_->compute_H_from_B( EMfields, iDim, min_or_max, dimPrim, solvermin, solvermax);
+        //pml_solver_->compute_E_from_D( EMfields, iDim, min_or_max, solvermin, solvermax);
+        pml_solver_->compute_H_from_B( EMfields, iDim, min_or_max, solvermin, solvermax);
 
         //Injecting a laser
         vector<double> bx( n_p[0]*n_d[2], 0. );
@@ -1030,36 +1052,36 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
         // 4. Exchange PML -> Domain
         // Primals in y-direction
         for (int j=0 ; j < nsolver/2-1 ; j++){
-            for( unsigned int i = 0 ; i<n_p[0] ; i++ ) {
+            for ( int i=0 ; i<n_p[0] ; i++ ) {
                 int idx_start = ncells_pml_xmin;
-                for( unsigned int k = 0 ; k<n_d[2] ; k++ ) {
+                for ( int k=0 ; k<n_d[2] ; k++ ) {
                     (*Ez_domain)(i,n_p[1]-1-j,k) = (*Ez_)(idx_start+i,domain_oversize_y+nsolver/2-1-j,k);
                 }
             }
-            for( unsigned int i = 0 ; i<n_d[0] ; i++ ) {
+            for ( int i=0 ; i<n_d[0] ; i++ ) {
                 int idx_start = ncells_pml_xmin;
-                for( unsigned int k = 0 ; k<n_p[2] ; k++ ) {
+                for ( int k=0 ; k<n_p[2] ; k++ ) {
                     (*Ex_domain)(i,n_p[1]-1-j,k) = (*Ex_)(idx_start+i,domain_oversize_y+nsolver/2-1-j,k);
                 }
-                for( unsigned int k = 0 ; k<n_d[2] ; k++ ) {
+                for ( int k=0 ; k<n_d[2] ; k++ ) {
                     (*By_domain)(i,n_p[1]-1-j,k) = (*Hy_)(idx_start+i,domain_oversize_y+nsolver/2-1-j,k);
                 }
             }
         }
         // Duals in y-direction
         for (int j=0 ; j < nsolver/2 ; j++){
-            for( unsigned int i = 0 ; i<n_p[0] ; i++ ) {
+            for ( int i=0 ; i<n_p[0] ; i++ ) {
                 int idx_start = ncells_pml_xmin;
-                for( unsigned int k = 0 ; k<n_p[2] ; k++ ) {
+                for ( int k=0 ; k<n_p[2] ; k++ ) {
                     (*Ey_domain)(i,n_d[1]-1-j,k) = (*Ey_)(idx_start+i,domain_oversize_y+nsolver/2-j,k);
                 }
-                for( unsigned int k = 0 ; k<n_d[2] ; k++ ) {
+                for ( int k=0 ; k<n_d[2] ; k++ ) {
                     (*Bx_domain)(i,n_d[1]-1-j,k) = (*Hx_)(idx_start+i,domain_oversize_y+nsolver/2-j,k);
                 }
             }
-            for( unsigned int i = 0 ; i<n_d[0] ; i++ ) {
+            for ( int i=0 ; i<n_d[0] ; i++ ) {
                 int idx_start = ncells_pml_xmin;
-                for( unsigned int k = 0 ; k<n_p[2] ; k++ ) {
+                for ( int k=0 ; k<n_p[2] ; k++ ) {
                     (*Bz_domain)(i,n_d[1]-1-j,k) = (*Hz_)(idx_start+i,domain_oversize_y+nsolver/2-j,k);
                 }
             }
@@ -1072,14 +1094,14 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
                 if(ncells_pml_xmin != 0){
                     for ( int i=0 ; i<ncells_pml_domain_xmin ; i++ ) {
                         int idx_start = 0;
-                        for( unsigned int k = 0 ; k<n_p[2] ; k++ ) {
+                        for ( int k=0 ; k<n_p[2] ; k++ ) {
                             // i-Primals
                             // Nothing
                             // i-Duals
                             (*Ex_pml_xmin)(i,n_p[1]-1-j,k) = (*Ex_)(idx_start+i,domain_oversize_y+nsolver/2-1-j,k);
                             (*Dx_pml_xmin)(i,n_p[1]-1-j,k) = (*Dx_)(idx_start+i,domain_oversize_y+nsolver/2-1-j,k);
                         }
-                        for( unsigned int k = 0 ; k<n_d[2] ; k++ ) {
+                        for ( int k=0 ; k<n_d[2] ; k++ ) {
                             // i-Primals
                             (*Ez_pml_xmin)(i,n_p[1]-1-j,k) = (*Ez_)(idx_start+i,domain_oversize_y+nsolver/2-1-j,k);
                             (*Dz_pml_xmin)(i,n_p[1]-1-j,k) = (*Dz_)(idx_start+i,domain_oversize_y+nsolver/2-1-j,k);
@@ -1097,7 +1119,7 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
                 if(ncells_pml_xmin != 0){
                     for ( int i=0 ; i<ncells_pml_domain_xmin ; i++ ) {
                         int idx_start = 0;
-                        for( unsigned int k = 0 ; k<n_p[2] ; k++ ) {
+                        for ( int k=0 ; k<n_p[2] ; k++ ) {
                             // i-Primals
                             (*Ey_pml_xmin)(i,n_d[1]-1-j,k) = (*Ey_)(idx_start+i,domain_oversize_y+nsolver/2-j,k);
                             (*Dy_pml_xmin)(i,n_d[1]-1-j,k) = (*Dy_)(idx_start+i,domain_oversize_y+nsolver/2-j,k);
@@ -1105,7 +1127,7 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
                             (*Hz_pml_xmin)(i,n_d[1]-1-j,k) = (*Hz_)(idx_start+i,domain_oversize_y+nsolver/2-j,k);
                             (*Bz_pml_xmin)(i,n_d[1]-1-j,k) = (*Bz_)(idx_start+i,domain_oversize_y+nsolver/2-j,k);
                         }
-                        for( unsigned int k = 0 ; k<n_d[2] ; k++ ) {
+                        for ( int k=0 ; k<n_d[2] ; k++ ) {
                             // i-Primals
                             (*Hx_pml_xmin)(i,n_d[1]-1-j,k) = (*Hx_)(idx_start+i,domain_oversize_y+nsolver/2-j,k);
                             (*Bx_pml_xmin)(i,n_d[1]-1-j,k) = (*Bx_)(idx_start+i,domain_oversize_y+nsolver/2-j,k);
@@ -1124,14 +1146,14 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
                 if(ncells_pml_xmax != 0){
                     for ( int i=0 ; i<ncells_pml_domain_xmax ; i++ ) {
                         int idx_start = ypml_size_in_x-ncells_pml_domain_xmax ;
-                        for( unsigned int k = 0 ; k<n_p[2] ; k++ ) {
+                        for ( int k=0 ; k<n_p[2] ; k++ ) {
                             // i-Primals
                             // Nothing
                             // i-Duals
                             (*Ex_pml_xmax)(i,n_p[1]-1-j,k) = (*Ex_)(idx_start+i,domain_oversize_y+nsolver/2-1-j,k);
                             (*Dx_pml_xmax)(i,n_p[1]-1-j,k) = (*Dx_)(idx_start+i,domain_oversize_y+nsolver/2-1-j,k);
                         }
-                        for( unsigned int k = 0 ; k<n_d[2] ; k++ ) {
+                        for ( int k=0 ; k<n_d[2] ; k++ ) {
                             // i-Primals
                             (*Ez_pml_xmax)(i,n_p[1]-1-j,k) = (*Ez_)(idx_start+i,domain_oversize_y+nsolver/2-1-j,k);
                             (*Dz_pml_xmax)(i,n_p[1]-1-j,k) = (*Dz_)(idx_start+i,domain_oversize_y+nsolver/2-1-j,k);
@@ -1149,7 +1171,7 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
                 if(ncells_pml_xmax != 0){
                     for ( int i=0 ; i<ncells_pml_domain_xmax ; i++ ) {
                         int idx_start = ypml_size_in_x-ncells_pml_domain_xmax ;
-                        for( unsigned int k = 0 ; k<n_p[2] ; k++ ) {
+                        for ( int k=0 ; k<n_p[2] ; k++ ) {
                             // i-Primals
                             (*Ey_pml_xmax)(i,n_d[1]-1-j,k) = (*Ey_)(idx_start+i,domain_oversize_y+nsolver/2-j,k);
                             (*Dy_pml_xmax)(i,n_d[1]-1-j,k) = (*Dy_)(idx_start+i,domain_oversize_y+nsolver/2-j,k);
@@ -1157,7 +1179,7 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
                             (*Hz_pml_xmax)(i,n_d[1]-1-j,k) = (*Hz_)(idx_start+i,domain_oversize_y+nsolver/2-j,k);
                             (*Bz_pml_xmax)(i,n_d[1]-1-j,k) = (*Bz_)(idx_start+i,domain_oversize_y+nsolver/2-j,k);
                         }
-                        for( unsigned int k = 0 ; k<n_d[2] ; k++ ) {
+                        for ( int k=0 ; k<n_d[2] ; k++ ) {
                             // i-Primals
                             (*Hx_pml_xmax)(i,n_d[1]-1-j,k) = (*Hx_)(idx_start+i,domain_oversize_y+nsolver/2-j,k);
                             (*Bx_pml_xmax)(i,n_d[1]-1-j,k) = (*Bx_)(idx_start+i,domain_oversize_y+nsolver/2-j,k);
@@ -1170,7 +1192,7 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
         }
     }
 
-    else if( i_boundary_ == 4 ) {
+    else if( i_boundary_ == 4 && patch->isZmin() ) {
 
         ElectroMagnBC3D_PML* pml_fields_xmin = NULL ;
         ElectroMagnBC3D_PML* pml_fields_xmax = NULL ;
@@ -1302,8 +1324,8 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
 
         // 1. Solve Maxwell_PML for E-field :
         // As if B-field isn't updated
-        pml_solver_->compute_E_from_D( EMfields, iDim, min_or_max, dimPrim, solvermin, solvermax);
-        //pml_solver_->compute_H_from_B( EMfields, iDim, min_or_max, dimPrim, solvermin, solvermax);
+        pml_solver_->compute_E_from_D( EMfields, iDim, min_or_max, solvermin, solvermax);
+        //pml_solver_->compute_H_from_B( EMfields, iDim, min_or_max, solvermin, solvermax);
 
         /*
         Dans le bloc du dessous (2.)
@@ -1318,7 +1340,7 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
                     int jdx_start = ncells_pml_ymin;
                     // Les qtes i-Primals commencent a 0
                     // Toutes les qtes i-Duals 0
-                    for( unsigned int j = 0 ; j<n_p[1] ; j++ ) {
+                    for ( int j=0 ; j<n_p[1] ; j++ ) {
                         for ( int i=0 ; i<ncells_pml_xmin ; i++ ) {
                             //Ex
                             (*Ex_)(idx_start+i,jdx_start+j,ncells_pml_domain-domain_oversize_z-nsolver/2+k) = (*Ex_pml_xmin)(i,j,k);
@@ -1331,7 +1353,7 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
                             (*Hy_)(idx_start+i,jdx_start+j,ncells_pml_domain-domain_oversize_z-nsolver/2+k) = (*Hy_pml_xmin)(i,j,k);
                         }
                     }
-                    for( unsigned int j = 0 ; j<n_d[1] ; j++ ) {
+                    for ( int j=0 ; j<n_d[1] ; j++ ) {
                         for ( int i=0 ; i<ncells_pml_xmin ; i++ ) {
                             //Ey
                             (*Ey_)(idx_start+i,jdx_start+j,ncells_pml_domain-domain_oversize_z-nsolver/2+k) = (*Ey_pml_xmin)(i,j,k);
@@ -1351,7 +1373,7 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
                     int jdx_start = 0;
                     // Les qtes j-Primals commencent a 0
                     // Toutes les qtes j-Duals 0
-                    for( unsigned int i = 0 ; i<n_p[0]+ncells_pml_xmin+ncells_pml_xmax ; i++ ) {
+                    for ( int i=0 ; i<n_p[0]+ncells_pml_xmin+ncells_pml_xmax ; i++ ) {
                         for ( int j=0 ; j<ncells_pml_ymin ; j++ ) {
                             // Ey
                             (*Ey_)(i,jdx_start+j,ncells_pml_domain-domain_oversize_z-nsolver/2+k) = (*Ey_pml_ymin)(i,j,k);
@@ -1364,7 +1386,7 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
                             (*Hx_)(i,jdx_start+j,ncells_pml_domain-domain_oversize_z-nsolver/2+k) = (*Hx_pml_ymin)(i,j,k);
                         }
                     }
-                    for( unsigned int i = 0 ; i<n_d[0]+ncells_pml_xmin+ncells_pml_xmax ; i++ ) {
+                    for ( int i=0 ; i<n_d[0]+ncells_pml_xmin+ncells_pml_xmax ; i++ ) {
                         for ( int j=0 ; j<ncells_pml_ymin ; j++ ) {
                             // Ex
                             (*Ex_)(i,jdx_start+j,ncells_pml_domain-domain_oversize_z-nsolver/2+k) = (*Ex_pml_ymin)(i,j,k);
@@ -1384,13 +1406,13 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
             int jdx_start = ncells_pml_ymin;
             // Si on est sur les bord min du domaine, au fait un petit shift
             // Les donnees ont deja ete echange au dessus
-            for( unsigned int i = 0 ; i<n_p[0] ; i++ ) {
-                for( unsigned int j = 0 ; j<n_p[1] ; j++ ) {
+            for ( int i=0 ; i<n_p[0] ; i++ ) {
+                for ( int j=0 ; j<n_p[1] ; j++ ) {
                     // Ez
                     (*Ez_)(idx_start+i,jdx_start+j,ncells_pml_domain-domain_oversize_z-nsolver/2+k) = (*Ez_domain)(i,j,k);
                     (*Dz_)(idx_start+i,jdx_start+j,ncells_pml_domain-domain_oversize_z-nsolver/2+k) = (*Ez_domain)(i,j,k);
                 }
-                for( unsigned int j = 0 ; j<n_d[1] ; j++ ) {
+                for ( int j=0 ; j<n_d[1] ; j++ ) {
                     // Ey
                     (*Ey_)(idx_start+i,jdx_start+j,ncells_pml_domain-domain_oversize_z-nsolver/2+k) = (*Ey_domain)(i,j,k);
                     (*Dy_)(idx_start+i,jdx_start+j,ncells_pml_domain-domain_oversize_z-nsolver/2+k) = (*Ey_domain)(i,j,k);
@@ -1399,8 +1421,8 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
                     (*Hx_)(idx_start+i,jdx_start+j,ncells_pml_domain-domain_oversize_z-nsolver/2+k) = (*Bx_domain)(i,j,k);
                 }
             }
-            for( unsigned int i = 0 ; i<n_d[0] ; i++ ) {
-                for( unsigned int j = 0 ; j<n_p[1] ; j++ ) {
+            for ( int i=0 ; i<n_d[0] ; i++ ) {
+                for ( int j=0 ; j<n_p[1] ; j++ ) {
                     // Ex
                     (*Ex_)(idx_start+i,jdx_start+j,ncells_pml_domain-domain_oversize_z-nsolver/2+k) = (*Ex_domain)(i,j,k);
                     (*Dx_)(idx_start+i,jdx_start+j,ncells_pml_domain-domain_oversize_z-nsolver/2+k) = (*Ex_domain)(i,j,k);
@@ -1408,7 +1430,7 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
                     (*By_)(idx_start+i,jdx_start+j,ncells_pml_domain-domain_oversize_z-nsolver/2+k) = (*By_domain)(i,j,k);
                     (*Hy_)(idx_start+i,jdx_start+j,ncells_pml_domain-domain_oversize_z-nsolver/2+k) = (*By_domain)(i,j,k);
                 }
-                for( unsigned int j = 0 ; j<n_d[1] ; j++ ) {
+                for ( int j=0 ; j<n_d[1] ; j++ ) {
                     // Bz
                     (*Bz_)(idx_start+i,jdx_start+j,ncells_pml_domain-domain_oversize_z-nsolver/2+k) = (*Bz_domain)(i,j,k);
                     (*Hz_)(idx_start+i,jdx_start+j,ncells_pml_domain-domain_oversize_z-nsolver/2+k) = (*Bz_domain)(i,j,k);
@@ -1420,7 +1442,7 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
                     int jdx_start = ncells_pml_ymin;
                     // Les qtes i-Primals commencent a (zpml_size_in_x+1)-ncells_pml_xmax
                     // Toutes les qtes i-Duals commence a idx_start+1
-                    for( unsigned int j = 0 ; j<n_p[1] ; j++ ) {
+                    for ( int j=0 ; j<n_p[1] ; j++ ) {
                         for ( int i=0 ; i<ncells_pml_xmax ; i++ ) {
                             //Ex
                             (*Ex_)(idx_start+1+i,jdx_start+j,ncells_pml_domain-domain_oversize_z-nsolver/2+k) = (*Ex_pml_xmax)(domain_oversize_x+nsolver/2+1+i,j,k);
@@ -1433,7 +1455,7 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
                             (*Hy_)(idx_start+1+i,jdx_start+j,ncells_pml_domain-domain_oversize_z-nsolver/2+k) = (*Hy_pml_xmax)(domain_oversize_x+nsolver/2+1+i,j,k);
                         }
                     }
-                    for( unsigned int j = 0 ; j<n_d[1] ; j++ ) {
+                    for ( int j=0 ; j<n_d[1] ; j++ ) {
                         for ( int i=0 ; i<ncells_pml_xmax ; i++ ) {
                             //Ey
                             (*Ey_)(idx_start+i,jdx_start+j,ncells_pml_domain-domain_oversize_z-nsolver/2+k) = (*Ey_pml_xmax)(domain_oversize_x+nsolver/2+i,j,k);
@@ -1453,7 +1475,7 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
                     int jdx_start = (zpml_size_in_y-1)-(ncells_pml_ymax-1) ;
                     // Les qtes j-Primals commencent a (zpml_size_in_y+1)-ncells_pml_ymax
                     // Toutes les qtes j-Duals commence a jdx_start+1
-                    for( unsigned int i = 0 ; i<n_p[0]+ncells_pml_xmin+ncells_pml_xmax ; i++ ) {
+                    for ( int i=0 ; i<n_p[0]+ncells_pml_xmin+ncells_pml_xmax ; i++ ) {
                         for ( int j=0 ; j<ncells_pml_ymax ; j++ ) {
                             // Ey
                             (*Ey_)(i,jdx_start+j+1,ncells_pml_domain-domain_oversize_z-nsolver/2+k) = (*Ey_pml_ymax)(i,domain_oversize_y+nsolver/2+1+j,k);
@@ -1466,7 +1488,7 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
                             (*Hx_)(i,jdx_start+j+1,ncells_pml_domain-domain_oversize_z-nsolver/2+k) = (*Hx_pml_ymax)(i,domain_oversize_y+nsolver/2+1+j,k);
                         }
                     }
-                    for( unsigned int i = 0 ; i<n_d[0]+ncells_pml_xmin+ncells_pml_xmax ; i++ ) {
+                    for ( int i=0 ; i<n_d[0]+ncells_pml_xmin+ncells_pml_xmax ; i++ ) {
                         for ( int j=0 ; j<ncells_pml_ymax ; j++ ) {
                             // Ex
                             (*Ex_)(i,jdx_start+j,ncells_pml_domain-domain_oversize_z-nsolver/2+k) = (*Ex_pml_ymax)(i,domain_oversize_y+nsolver/2+j,k);
@@ -1489,8 +1511,8 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
         // */
 
         // 3. Solve Maxwell_PML for B-field :
-        //pml_solver_->compute_E_from_D( EMfields, iDim, min_or_max, dimPrim, solvermin, solvermax);
-        pml_solver_->compute_H_from_B( EMfields, iDim, min_or_max, dimPrim, solvermin, solvermax);
+        //pml_solver_->compute_E_from_D( EMfields, iDim, min_or_max, solvermin, solvermax);
+        pml_solver_->compute_H_from_B( EMfields, iDim, min_or_max, solvermin, solvermax);
 
         //Injecting a laser
         vector<double> bx( n_p[0]*n_d[1], 0. ); // Bx(p,d,d)
@@ -1527,19 +1549,19 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
         for (int k=0 ; k < nsolver/2 ; k++){
             int idx_start = ncells_pml_xmin;
             int jdx_start = ncells_pml_ymin;
-            for( unsigned int i = 0 ; i<n_p[0] ; i++ ) {
-                // for( unsigned int j = 0 ; j<n_p[1] ; j++ ) {
+            for ( int i=0 ; i<n_p[0] ; i++ ) {
+                // for ( int j=0 ; j<n_p[1] ; j++ ) {
                 //     No field
                 // }
-                for( unsigned int j = 0 ; j<n_d[1] ; j++ ) {
+                for ( int j=0 ; j<n_d[1] ; j++ ) {
                     (*Ey_domain)(i,j,k) = (*Ey_)(idx_start+i,jdx_start+j,ncells_pml_domain-domain_oversize_x-nsolver/2+k);
                 }
             }
-            for( unsigned int i = 0 ; i<n_d[0] ; i++ ) {
-                for( unsigned int j = 0 ; j<n_p[1] ; j++ ) {
+            for ( int i=0 ; i<n_d[0] ; i++ ) {
+                for ( int j=0 ; j<n_p[1] ; j++ ) {
                     (*Ex_domain)(i,j,k) = (*Ex_)(idx_start+i,jdx_start+j,ncells_pml_domain-domain_oversize_x-nsolver/2+k);
                 }
-                for( unsigned int j = 0 ; j<n_d[1] ; j++ ) {
+                for ( int j=0 ; j<n_d[1] ; j++ ) {
                     (*Bz_domain)(i,j,k) = (*Hz_)(idx_start+i,jdx_start+j,ncells_pml_domain-domain_oversize_x-nsolver/2+k);
                 }
             }
@@ -1548,19 +1570,19 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
         for (int k=0 ; k < nsolver/2 ; k++){
             int idx_start = ncells_pml_xmin;
             int jdx_start = ncells_pml_ymin;
-            for( unsigned int i = 0 ; i<n_p[0] ; i++ ) {
-                for( unsigned int j = 0 ; j<n_p[1] ; j++ ) {
+            for ( int i=0 ; i<n_p[0] ; i++ ) {
+                for ( int j=0 ; j<n_p[1] ; j++ ) {
                     (*Ez_domain)(i,j,k) = (*Ez_)(idx_start+i,jdx_start+j,ncells_pml_domain-domain_oversize_x-nsolver/2+k);
                 }
-                for( unsigned int j = 0 ; j<n_d[1] ; j++ ) {
+                for ( int j=0 ; j<n_d[1] ; j++ ) {
                     (*Bx_domain)(i,j,k) = (*Hx_)(idx_start+i,jdx_start+j,ncells_pml_domain-domain_oversize_x-nsolver/2+k);
                 }
             }
-            for( unsigned int i = 0 ; i<n_d[0] ; i++ ) {
-                for( unsigned int j = 0 ; j<n_p[1] ; j++ ) {
+            for ( int i=0 ; i<n_d[0] ; i++ ) {
+                for ( int j=0 ; j<n_p[1] ; j++ ) {
                     (*By_domain)(i,j,k) = (*Hy_)(idx_start+i,jdx_start+j,ncells_pml_domain-domain_oversize_x-nsolver/2+k);
                 }
-                // for( unsigned int j = 0 ; j<n_d[1] ; j++ ) {
+                // for ( int j=0 ; j<n_d[1] ; j++ ) {
                 //     No field
                 // }
             }
@@ -1574,13 +1596,13 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
                     int idx_start = 0;
                     int jdx_start = ncells_pml_ymin;
                     for ( int i=0 ; i<ncells_pml_domain_xmin ; i++ ) {
-                        for( unsigned int j = 0 ; j<n_p[1] ; j++ ) {
+                        for ( int j=0 ; j<n_p[1] ; j++ ) {
                             // i-Primals
                             // i-Duals
                             (*Ex_pml_xmin)(i,j,k) = (*Ex_)(idx_start+i,jdx_start+j,ncells_pml_domain-domain_oversize_z-nsolver/2+k);
                             (*Dx_pml_xmin)(i,j,k) = (*Dx_)(idx_start+i,jdx_start+j,ncells_pml_domain-domain_oversize_z-nsolver/2+k);
                         }
-                        for( unsigned int j = 0 ; j<n_d[1] ; j++ ) {
+                        for ( int j=0 ; j<n_d[1] ; j++ ) {
                             // i-Primals
                             (*Ey_pml_xmin)(i,j,k) = (*Ey_)(idx_start+i,jdx_start+j,ncells_pml_domain-domain_oversize_z-nsolver/2+k);
                             (*Dy_pml_xmin)(i,j,k) = (*Dy_)(idx_start+i,jdx_start+j,ncells_pml_domain-domain_oversize_z-nsolver/2+k);
@@ -1599,7 +1621,7 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
                     int idx_start = 0;
                     int jdx_start = ncells_pml_ymin;
                     for ( int i=0 ; i<ncells_pml_domain_xmin ; i++ ) {
-                        for( unsigned int j = 0 ; j<n_p[1] ; j++ ) {
+                        for ( int j=0 ; j<n_p[1] ; j++ ) {
                             // i-Primals
                             (*Ez_pml_xmin)(i,j,k) = (*Ez_)(idx_start+i,jdx_start+j,ncells_pml_domain-domain_oversize_z-nsolver/2+k);
                             (*Dz_pml_xmin)(i,j,k) = (*Dz_)(idx_start+i,jdx_start+j,ncells_pml_domain-domain_oversize_z-nsolver/2+k);
@@ -1607,7 +1629,7 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
                             (*Hy_pml_xmin)(i,j,k) = (*Hy_)(idx_start+i,jdx_start+j,ncells_pml_domain-domain_oversize_z-nsolver/2+k);
                             (*By_pml_xmin)(i,j,k) = (*By_)(idx_start+i,jdx_start+j,ncells_pml_domain-domain_oversize_z-nsolver/2+k);
                         }
-                        for( unsigned int j = 0 ; j<n_d[1] ; j++ ) {
+                        for ( int j=0 ; j<n_d[1] ; j++ ) {
                             // i-Primals
                             (*Hx_pml_xmin)(i,j,k) = (*Hx_)(idx_start+i,jdx_start+j,ncells_pml_domain-domain_oversize_z-nsolver/2+k);
                             (*Bx_pml_xmin)(i,j,k) = (*Bx_)(idx_start+i,jdx_start+j,ncells_pml_domain-domain_oversize_z-nsolver/2+k);
@@ -1626,12 +1648,12 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
                     for ( int i=0 ; i<ncells_pml_domain_xmax ; i++ ) {
                         int idx_start = zpml_size_in_x-ncells_pml_domain_xmax ;
                         int jdx_start = ncells_pml_ymin;
-                        for( unsigned int j = 0 ; j<n_p[1] ; j++ ) {
+                        for ( int j=0 ; j<n_p[1] ; j++ ) {
                             // i-Dual
                             (*Ex_pml_xmax)(i,j,k) = (*Ex_)(idx_start+i,jdx_start+j,ncells_pml_domain-domain_oversize_z-nsolver/2+k);
                             (*Dx_pml_xmax)(i,j,k) = (*Dx_)(idx_start+i,jdx_start+j,ncells_pml_domain-domain_oversize_z-nsolver/2+k);
                         }
-                        for( unsigned int j = 0 ; j<n_d[1] ; j++ ) {
+                        for ( int j=0 ; j<n_d[1] ; j++ ) {
                             // i-Primals
                             (*Ey_pml_xmax)(i,j,k) = (*Ey_)(idx_start+i,jdx_start+j,ncells_pml_domain-domain_oversize_z-nsolver/2+k);
                             (*Dy_pml_xmax)(i,j,k) = (*Dy_)(idx_start+i,jdx_start+j,ncells_pml_domain-domain_oversize_z-nsolver/2+k);
@@ -1650,7 +1672,7 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
                     for ( int i=0 ; i<ncells_pml_domain_xmax ; i++ ) {
                         int idx_start = zpml_size_in_x-ncells_pml_domain_xmax ;
                         int jdx_start = ncells_pml_ymin;
-                        for( unsigned int j = 0 ; j<n_p[1] ; j++ ) {
+                        for ( int j=0 ; j<n_p[1] ; j++ ) {
                             // i-Primals
                             (*Ez_pml_xmax)(i,j,k) = (*Ez_)(idx_start+i,jdx_start+j,ncells_pml_domain-domain_oversize_z-nsolver/2+k);
                             (*Dz_pml_xmax)(i,j,k) = (*Dz_)(idx_start+i,jdx_start+j,ncells_pml_domain-domain_oversize_z-nsolver/2+k);
@@ -1658,7 +1680,7 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
                             (*Hy_pml_xmax)(i,j,k) = (*Hy_)(idx_start+i,jdx_start+j,ncells_pml_domain-domain_oversize_z-nsolver/2+k);
                             (*By_pml_xmax)(i,j,k) = (*By_)(idx_start+i,jdx_start+j,ncells_pml_domain-domain_oversize_z-nsolver/2+k);
                         }
-                        for( unsigned int j = 0 ; j<n_d[1] ; j++ ) {
+                        for ( int j=0 ; j<n_d[1] ; j++ ) {
                             // i-Primals
                             (*Hx_pml_xmax)(i,j,k) = (*Hx_)(idx_start+i,jdx_start+j,ncells_pml_domain-domain_oversize_z-nsolver/2+k);
                             (*Bx_pml_xmax)(i,j,k) = (*Bx_)(idx_start+i,jdx_start+j,ncells_pml_domain-domain_oversize_z-nsolver/2+k);
@@ -1675,13 +1697,13 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
                 if(ncells_pml_ymin != 0){
                     int jdx_start = 0;
                     for ( int j=0 ; j<ncells_pml_domain_ymin ; j++ ) {
-                        for( unsigned int i = 0 ; i<n_p[0]+ncells_pml_xmin+ncells_pml_xmax ; i++ ) {
+                        for ( int i=0 ; i<n_p[0]+ncells_pml_xmin+ncells_pml_xmax ; i++ ) {
                             // j-Primals
                             // j-Duals
                             (*Ey_pml_ymin)(i,j,k) = (*Ey_)(i,jdx_start+j,ncells_pml_domain-domain_oversize_z-nsolver/2+k);
                             (*Dy_pml_ymin)(i,j,k) = (*Dy_)(i,jdx_start+j,ncells_pml_domain-domain_oversize_z-nsolver/2+k);
                         }
-                        for( unsigned int i = 0 ; i<n_d[0]+ncells_pml_xmin+ncells_pml_xmax ; i++ ) {
+                        for ( int i=0 ; i<n_d[0]+ncells_pml_xmin+ncells_pml_xmax ; i++ ) {
                             // j-Primals
                             (*Ex_pml_ymin)(i,j,k) = (*Ex_)(i,jdx_start+j,ncells_pml_domain-domain_oversize_z-nsolver/2+k);
                             (*Dx_pml_ymin)(i,j,k) = (*Dx_)(i,jdx_start+j,ncells_pml_domain-domain_oversize_z-nsolver/2+k);
@@ -1699,7 +1721,7 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
                 if(ncells_pml_ymin != 0){
                     int jdx_start = 0;
                     for ( int j=0 ; j<ncells_pml_domain_ymin ; j++ ) {
-                        for( unsigned int i = 0 ; i<n_p[0]+ncells_pml_xmin+ncells_pml_xmax ; i++ ) {
+                        for ( int i=0 ; i<n_p[0]+ncells_pml_xmin+ncells_pml_xmax ; i++ ) {
                             // j-Primals
                             (*Ez_pml_ymin)(i,j,k) = (*Ez_)(i,jdx_start+j,ncells_pml_domain-domain_oversize_z-nsolver/2+k);
                             (*Dz_pml_ymin)(i,j,k) = (*Dz_)(i,jdx_start+j,ncells_pml_domain-domain_oversize_z-nsolver/2+k);
@@ -1707,7 +1729,7 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
                             (*Hx_pml_ymin)(i,j,k) = (*Hx_)(i,jdx_start+j,ncells_pml_domain-domain_oversize_z-nsolver/2+k);
                             (*Bx_pml_ymin)(i,j,k) = (*Bx_)(i,jdx_start+j,ncells_pml_domain-domain_oversize_z-nsolver/2+k);
                         }
-                        for( unsigned int i = 0 ; i<n_d[0]+ncells_pml_xmin+ncells_pml_xmax ; i++ ) {
+                        for ( int i=0 ; i<n_d[0]+ncells_pml_xmin+ncells_pml_xmax ; i++ ) {
                             // j-Primals
                             (*Hy_pml_ymin)(i,j,k) = (*Hy_)(i,jdx_start+j,ncells_pml_domain-domain_oversize_z-nsolver/2+k);
                             (*By_pml_ymin)(i,j,k) = (*By_)(i,jdx_start+j,ncells_pml_domain-domain_oversize_z-nsolver/2+k);
@@ -1725,13 +1747,13 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
                 if(ncells_pml_ymax != 0){
                     for ( int j=0 ; j<ncells_pml_domain_ymax ; j++ ) {
                         int jdx_start = zpml_size_in_y-ncells_pml_domain_ymax ;
-                        for( unsigned int i = 0 ; i<n_p[0]+ncells_pml_xmin+ncells_pml_xmax ; i++ ) {
+                        for ( int i=0 ; i<n_p[0]+ncells_pml_xmin+ncells_pml_xmax ; i++ ) {
                             // j-Primals
                             // j-Dual
                             (*Ey_pml_ymax)(i,j,k) = (*Ey_)(i,jdx_start+j,ncells_pml_domain-domain_oversize_z-nsolver/2+k);
                             (*Dy_pml_ymax)(i,j,k) = (*Dy_)(i,jdx_start+j,ncells_pml_domain-domain_oversize_z-nsolver/2+k);
                         }
-                        for( unsigned int i = 0 ; i<n_d[0]+ncells_pml_xmin+ncells_pml_xmax ; i++ ) {
+                        for ( int i=0 ; i<n_d[0]+ncells_pml_xmin+ncells_pml_xmax ; i++ ) {
                             // j-Primals
                             (*Ex_pml_ymax)(i,j,k) = (*Ex_)(i,jdx_start+j,ncells_pml_domain-domain_oversize_z-nsolver/2+k);
                             (*Dx_pml_ymax)(i,j,k) = (*Dx_)(i,jdx_start+j,ncells_pml_domain-domain_oversize_z-nsolver/2+k);
@@ -1749,7 +1771,7 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
                 if(ncells_pml_ymax != 0){
                     for ( int j=0 ; j<ncells_pml_domain_ymax ; j++ ) {
                         int jdx_start = zpml_size_in_y-ncells_pml_domain_ymax ;
-                        for( unsigned int i = 0 ; i<n_p[0]+ncells_pml_xmin+ncells_pml_xmax ; i++ ) {
+                        for ( int i=0 ; i<n_p[0]+ncells_pml_xmin+ncells_pml_xmax ; i++ ) {
                             // j-Primals
                             (*Ez_pml_ymax)(i,j,k) = (*Ez_)(i,jdx_start+j,ncells_pml_domain-domain_oversize_z-nsolver/2+k);
                             (*Dz_pml_ymax)(i,j,k) = (*Dz_)(i,jdx_start+j,ncells_pml_domain-domain_oversize_z-nsolver/2+k);
@@ -1757,7 +1779,7 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
                             (*Hx_pml_ymax)(i,j,k) = (*Hx_)(i,jdx_start+j,ncells_pml_domain-domain_oversize_z-nsolver/2+k);
                             (*Bx_pml_ymax)(i,j,k) = (*Bx_)(i,jdx_start+j,ncells_pml_domain-domain_oversize_z-nsolver/2+k);
                         }
-                        for( unsigned int i = 0 ; i<n_d[0]+ncells_pml_xmin+ncells_pml_xmax ; i++ ) {
+                        for ( int i=0 ; i<n_d[0]+ncells_pml_xmin+ncells_pml_xmax ; i++ ) {
                             // j-Primals
                             (*Hy_pml_ymax)(i,j,k) = (*Hy_)(i,jdx_start+j,ncells_pml_domain-domain_oversize_z-nsolver/2+k);
                             (*By_pml_ymax)(i,j,k) = (*By_)(i,jdx_start+j,ncells_pml_domain-domain_oversize_z-nsolver/2+k);
@@ -1769,7 +1791,7 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
         }
     }
 
-    else if( i_boundary_ == 5 ) {
+    else if( i_boundary_ == 5 && patch->isZmax() ) {
 
         ElectroMagnBC3D_PML* pml_fields_xmin = NULL ;
         ElectroMagnBC3D_PML* pml_fields_xmax = NULL ;
@@ -1901,8 +1923,8 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
 
         // 1. Solve Maxwell_PML for E-field :
         // As if B-field isn't updated
-        pml_solver_->compute_E_from_D( EMfields, iDim, min_or_max, dimPrim, solvermin, solvermax);
-        //pml_solver_->compute_H_from_B( EMfields, iDim, min_or_max, dimPrim, solvermin, solvermax);
+        pml_solver_->compute_E_from_D( EMfields, iDim, min_or_max, solvermin, solvermax);
+        //pml_solver_->compute_H_from_B( EMfields, iDim, min_or_max, solvermin, solvermax);
 
         /*
         Dans le bloc du dessous (2.)
@@ -1916,7 +1938,7 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
                     int idx_start = 0;
                     int jdx_start = ncells_pml_ymin;
                     for ( int i=0 ; i<ncells_pml_xmin ; i++ ) {
-                        for( unsigned int j = 0 ; j<n_p[1] ; j++ ) {
+                        for ( int j=0 ; j<n_p[1] ; j++ ) {
                             //Ex
                             (*Ex_)(idx_start+i,jdx_start+j,domain_oversize_z+nsolver/2-k) = (*Ex_pml_xmin)(i,j,n_p[2]-k);
                             (*Dx_)(idx_start+i,jdx_start+j,domain_oversize_z+nsolver/2-k) = (*Dx_pml_xmin)(i,j,n_p[2]-k);
@@ -1927,7 +1949,7 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
                             (*By_)(idx_start+i,jdx_start+j,domain_oversize_z+nsolver/2-k) = (*By_pml_xmin)(i,j,n_p[2]-k);
                             (*Hy_)(idx_start+i,jdx_start+j,domain_oversize_z+nsolver/2-k) = (*Hy_pml_xmin)(i,j,n_p[2]-k);
                         }
-                        for( unsigned int j = 0 ; j<n_d[1] ; j++ ) {
+                        for ( int j=0 ; j<n_d[1] ; j++ ) {
                             //Ey
                             (*Ey_)(idx_start+i,jdx_start+j,domain_oversize_z+nsolver/2-k) = (*Ey_pml_xmin)(i,j,n_p[2]-k);
                             (*Dy_)(idx_start+i,jdx_start+j,domain_oversize_z+nsolver/2-k) = (*Dy_pml_xmin)(i,j,n_p[2]-k);
@@ -1944,7 +1966,7 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
             if (patch->isYmin()) {
                 if(ncells_pml_ymin != 0){
                     int jdx_start = 0;
-                    for( unsigned int i = 0 ; i<n_p[0]+ncells_pml_xmin+ncells_pml_xmax ; i++ ) {
+                    for ( int i=0 ; i<n_p[0]+ncells_pml_xmin+ncells_pml_xmax ; i++ ) {
                         for ( int j=0 ; j<ncells_pml_ymin ; j++ ) {
                             // Ey
                             (*Ey_)(i,jdx_start+j,domain_oversize_z+nsolver/2-k) = (*Ey_pml_ymin)(i,j,n_p[2]-k);
@@ -1957,7 +1979,7 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
                             (*Hx_)(i,jdx_start+j,domain_oversize_z+nsolver/2-k) = (*Hx_pml_ymin)(i,j,n_p[2]-k);
                         }
                     }
-                    for( unsigned int i = 0 ; i<n_d[0]+ncells_pml_xmin+ncells_pml_xmax ; i++ ) {
+                    for ( int i=0 ; i<n_d[0]+ncells_pml_xmin+ncells_pml_xmax ; i++ ) {
                         for ( int j=0 ; j<ncells_pml_ymin ; j++ ) {
                             // Ex
                             (*Ex_)(i,jdx_start+j,domain_oversize_z+nsolver/2-k) = (*Ex_pml_ymin)(i,j,n_p[2]-k);
@@ -1975,13 +1997,13 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
             // Au milieu du domain
             int idx_start = ncells_pml_xmin;
             int jdx_start = ncells_pml_ymin;
-            for( unsigned int i = 0 ; i<n_p[0] ; i++ ) {
-                for( unsigned int j = 0 ; j<n_p[1] ; j++ ) {
+            for ( int i=0 ; i<n_p[0] ; i++ ) {
+                for ( int j=0 ; j<n_p[1] ; j++ ) {
                     // Ez
                     (*Ez_)(idx_start+i,jdx_start+j,domain_oversize_z+nsolver/2-k) = (*Ez_domain)(i,j,n_p[2]-k);
                     (*Dz_)(idx_start+i,jdx_start+j,domain_oversize_z+nsolver/2-k) = (*Ez_domain)(i,j,n_p[2]-k);
                 }
-                for( unsigned int j = 0 ; j<n_d[1] ; j++ ) {
+                for ( int j=0 ; j<n_d[1] ; j++ ) {
                     // Ey
                     (*Ey_)(idx_start+i,jdx_start+j,domain_oversize_z+nsolver/2-k) = (*Ey_domain)(i,j,n_p[2]-k);
                     (*Dy_)(idx_start+i,jdx_start+j,domain_oversize_z+nsolver/2-k) = (*Ey_domain)(i,j,n_p[2]-k);
@@ -1990,8 +2012,8 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
                     (*Hx_)(idx_start+i,jdx_start+j,domain_oversize_z+nsolver/2-k) = (*Bx_domain)(i,j,n_p[2]-k);
                 }
             }
-            for( unsigned int i = 0 ; i<n_d[0] ; i++ ) {
-                for( unsigned int j = 0 ; j<n_p[1] ; j++ ) {
+            for ( int i=0 ; i<n_d[0] ; i++ ) {
+                for ( int j=0 ; j<n_p[1] ; j++ ) {
                     // Ex
                     (*Ex_)(idx_start+i,jdx_start+j,domain_oversize_z+nsolver/2-k) = (*Ex_domain)(i,j,n_p[2]-k);
                     (*Dx_)(idx_start+i,jdx_start+j,domain_oversize_z+nsolver/2-k) = (*Ex_domain)(i,j,n_p[2]-k);
@@ -1999,7 +2021,7 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
                     (*By_)(idx_start+i,jdx_start+j,domain_oversize_z+nsolver/2-k) = (*By_domain)(i,j,n_p[2]-k);
                     (*Hy_)(idx_start+i,jdx_start+j,domain_oversize_z+nsolver/2-k) = (*By_domain)(i,j,n_p[2]-k);
                 }
-                for( unsigned int j = 0 ; j<n_d[1] ; j++ ) {
+                for ( int j=0 ; j<n_d[1] ; j++ ) {
                     // Bz
                     (*Bz_)(idx_start+i,jdx_start+j,domain_oversize_z+nsolver/2-k) = (*Bz_domain)(i,j,n_p[2]-k);
                     (*Hz_)(idx_start+i,jdx_start+j,domain_oversize_z+nsolver/2-k) = (*Bz_domain)(i,j,n_p[2]-k);
@@ -2010,7 +2032,7 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
                     int idx_start = (zpml_size_in_x-1)-(ncells_pml_xmax-1) ;
                     int jdx_start = ncells_pml_ymin;
                     for ( int i=0 ; i<ncells_pml_xmax ; i++ ) {
-                        for( unsigned int j = 0 ; j<n_p[1] ; j++ ) {
+                        for ( int j=0 ; j<n_p[1] ; j++ ) {
                             //Ex
                             (*Ex_)(idx_start+1+i,jdx_start+j,domain_oversize_z+nsolver/2-k) = (*Ex_pml_xmax)(domain_oversize_x+nsolver/2+1+i,j,n_p[2]-k);
                             (*Dx_)(idx_start+1+i,jdx_start+j,domain_oversize_z+nsolver/2-k) = (*Dx_pml_xmax)(domain_oversize_x+nsolver/2+1+i,j,n_p[2]-k);
@@ -2021,7 +2043,7 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
                             (*By_)(idx_start+1+i,jdx_start+j,domain_oversize_z+nsolver/2-k) = (*By_pml_xmax)(domain_oversize_x+nsolver/2+1+i,j,n_p[2]-k);
                             (*Hy_)(idx_start+1+i,jdx_start+j,domain_oversize_z+nsolver/2-k) = (*Hy_pml_xmax)(domain_oversize_x+nsolver/2+1+i,j,n_p[2]-k);
                         }
-                        for( unsigned int j = 0 ; j<n_d[1] ; j++ ) {
+                        for ( int j=0 ; j<n_d[1] ; j++ ) {
                             //Ey
                             (*Ey_)(idx_start+i,jdx_start+j,domain_oversize_z+nsolver/2-k) = (*Ey_pml_xmax)(domain_oversize_x+nsolver/2+i,j,n_p[2]-k);
                             (*Dy_)(idx_start+i,jdx_start+j,domain_oversize_z+nsolver/2-k) = (*Dy_pml_xmax)(domain_oversize_x+nsolver/2+i,j,n_p[2]-k);
@@ -2040,7 +2062,7 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
                     int jdx_start = (zpml_size_in_y-1)-(ncells_pml_ymax-1) ;
                     // Les qtes j-Primals commencent a (zpml_size_in_y+1)-ncells_pml_ymax
                     // Toutes les qtes j-Duals commence a jdx_start+1
-                    for( unsigned int i = 0 ; i<n_p[0]+ncells_pml_xmin+ncells_pml_xmax ; i++ ) {
+                    for ( int i=0 ; i<n_p[0]+ncells_pml_xmin+ncells_pml_xmax ; i++ ) {
                         for ( int j=0 ; j<ncells_pml_ymax ; j++ ) {
                             // Ey
                             (*Ey_)(i,jdx_start+j+1,domain_oversize_z+nsolver/2-k) = (*Ey_pml_ymax)(i,domain_oversize_y+nsolver/2+1+j,n_p[2]-k);
@@ -2053,7 +2075,7 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
                             (*Hx_)(i,jdx_start+j+1,domain_oversize_z+nsolver/2-k) = (*Hx_pml_ymax)(i,domain_oversize_y+nsolver/2+1+j,n_p[2]-k);
                         }
                     }
-                    for( unsigned int i = 0 ; i<n_d[0]+ncells_pml_xmin+ncells_pml_xmax ; i++ ) {
+                    for ( int i=0 ; i<n_d[0]+ncells_pml_xmin+ncells_pml_xmax ; i++ ) {
                         for ( int j=0 ; j<ncells_pml_ymax ; j++ ) {
                             // Ex
                             (*Ex_)(i,jdx_start+j,domain_oversize_z+nsolver/2-k) = (*Ex_pml_ymax)(i,domain_oversize_y+nsolver/2+j,n_p[2]-k);
@@ -2076,8 +2098,8 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
         */
 
         // 3. Solve Maxwell_PML for B-field :
-        //pml_solver_->compute_E_from_D( EMfields, iDim, min_or_max, dimPrim, solvermin, solvermax);
-        pml_solver_->compute_H_from_B( EMfields, iDim, min_or_max, dimPrim, solvermin, solvermax);
+        //pml_solver_->compute_E_from_D( EMfields, iDim, min_or_max, solvermin, solvermax);
+        pml_solver_->compute_H_from_B( EMfields, iDim, min_or_max, solvermin, solvermax);
 
         //Injecting a laser
         vector<double> bx( n_p[0]*n_d[1], 0. ); // Bx(p,d,d)
@@ -2114,19 +2136,19 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
         for (int k=0 ; k < nsolver/2-1 ; k++){
             int idx_start = ncells_pml_xmin;
             int jdx_start = ncells_pml_ymin;
-            for( unsigned int i = 0 ; i<n_p[0] ; i++ ) {
-                // for( unsigned int j = 0 ; j<n_p[1] ; j++ ) {
+            for ( int i=0 ; i<n_p[0] ; i++ ) {
+                // for ( int j=0 ; j<n_p[1] ; j++ ) {
                 //     No field
                 // }
-                for( unsigned int j = 0 ; j<n_d[1] ; j++ ) {
+                for ( int j=0 ; j<n_d[1] ; j++ ) {
                     (*Ey_domain)(i,j,n_p[2]-1-k) = (*Ey_)(idx_start+i,jdx_start+j,domain_oversize_z+nsolver/2-1-k);
                 }
             }
-            for( unsigned int i = 0 ; i<n_d[0] ; i++ ) {
-                for( unsigned int j = 0 ; j<n_p[1] ; j++ ) {
+            for ( int i=0 ; i<n_d[0] ; i++ ) {
+                for ( int j=0 ; j<n_p[1] ; j++ ) {
                     (*Ex_domain)(i,j,n_p[2]-1-k) = (*Ex_)(idx_start+i,jdx_start+j,domain_oversize_z+nsolver/2-1-k);
                 }
-                for( unsigned int j = 0 ; j<n_d[1] ; j++ ) {
+                for ( int j=0 ; j<n_d[1] ; j++ ) {
                     (*Bz_domain)(i,j,n_p[2]-1-k) = (*Hz_)(idx_start+i,jdx_start+j,domain_oversize_z+nsolver/2-1-k);
                 }
             }
@@ -2135,19 +2157,19 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
         for (int k=0 ; k < nsolver/2 ; k++){
             int idx_start = ncells_pml_xmin;
             int jdx_start = ncells_pml_ymin;
-            for( unsigned int i = 0 ; i<n_p[0] ; i++ ) {
-                for( unsigned int j = 0 ; j<n_p[1] ; j++ ) {
+            for ( int i=0 ; i<n_p[0] ; i++ ) {
+                for ( int j=0 ; j<n_p[1] ; j++ ) {
                     (*Ez_domain)(i,j,n_d[2]-1-k) = (*Ez_)(idx_start+i,jdx_start+j,domain_oversize_z+nsolver/2-k);
                 }
-                for( unsigned int j = 0 ; j<n_d[1] ; j++ ) {
+                for ( int j=0 ; j<n_d[1] ; j++ ) {
                     (*Bx_domain)(i,j,n_d[2]-1-k) = (*Hx_)(idx_start+i,jdx_start+j,domain_oversize_z+nsolver/2-k);
                 }
             }
-            for( unsigned int i = 0 ; i<n_d[0] ; i++ ) {
-                for( unsigned int j = 0 ; j<n_p[1] ; j++ ) {
+            for ( int i=0 ; i<n_d[0] ; i++ ) {
+                for ( int j=0 ; j<n_p[1] ; j++ ) {
                     (*By_domain)(i,j,n_d[2]-1-k) = (*Hy_)(idx_start+i,jdx_start+j,domain_oversize_z+nsolver/2-k);
                 }
-                // for( unsigned int j = 0 ; j<n_d[1] ; j++ ) {
+                // for ( int j=0 ; j<n_d[1] ; j++ ) {
                 //     No field
                 // }
             }
@@ -2162,13 +2184,13 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
                     int idx_start = 0;
                     int jdx_start = ncells_pml_ymin;
                     for ( int i=0 ; i<ncells_pml_domain_xmin ; i++ ) {
-                        for( unsigned int j = 0 ; j<n_p[1] ; j++ ) {
+                        for ( int j=0 ; j<n_p[1] ; j++ ) {
                             // i-Primals
                             // i-Duals
                             (*Ex_pml_xmin)(i,j,n_p[2]-1-k) = (*Ex_)(idx_start+i,jdx_start+j,domain_oversize_z+nsolver/2-1-k);
                             (*Dx_pml_xmin)(i,j,n_p[2]-1-k) = (*Dx_)(idx_start+i,jdx_start+j,domain_oversize_z+nsolver/2-1-k);
                         }
-                        for( unsigned int j = 0 ; j<n_d[1] ; j++ ) {
+                        for ( int j=0 ; j<n_d[1] ; j++ ) {
                             // i-Primals
                             (*Ey_pml_xmin)(i,j,n_p[2]-1-k) = (*Ey_)(idx_start+i,jdx_start+j,domain_oversize_z+nsolver/2-1-k);
                             (*Dy_pml_xmin)(i,j,n_p[2]-1-k) = (*Dy_)(idx_start+i,jdx_start+j,domain_oversize_z+nsolver/2-1-k);
@@ -2187,7 +2209,7 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
                     int idx_start = 0;
                     int jdx_start = ncells_pml_ymin;
                     for ( int i=0 ; i<ncells_pml_domain_xmin ; i++ ) {
-                        for( unsigned int j = 0 ; j<n_p[1] ; j++ ) {
+                        for ( int j=0 ; j<n_p[1] ; j++ ) {
                             // i-Primals
                             (*Ez_pml_xmin)(i,j,n_d[2]-1-k) = (*Ez_)(idx_start+i,jdx_start+j,domain_oversize_z+nsolver/2-k);
                             (*Dz_pml_xmin)(i,j,n_d[2]-1-k) = (*Dz_)(idx_start+i,jdx_start+j,domain_oversize_z+nsolver/2-k);
@@ -2195,7 +2217,7 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
                             (*Hy_pml_xmin)(i,j,n_d[2]-1-k) = (*Hy_)(idx_start+i,jdx_start+j,domain_oversize_z+nsolver/2-k);
                             (*By_pml_xmin)(i,j,n_d[2]-1-k) = (*By_)(idx_start+i,jdx_start+j,domain_oversize_z+nsolver/2-k);
                         }
-                        for( unsigned int j = 0 ; j<n_d[1] ; j++ ) {
+                        for ( int j=0 ; j<n_d[1] ; j++ ) {
                             // i-Primals
                             (*Hx_pml_xmin)(i,j,n_d[2]-1-k) = (*Hx_)(idx_start+i,jdx_start+j,domain_oversize_z+nsolver/2-k);
                             (*Bx_pml_xmin)(i,j,n_d[2]-1-k) = (*Bx_)(idx_start+i,jdx_start+j,domain_oversize_z+nsolver/2-k);
@@ -2215,12 +2237,12 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
                     for ( int i=0 ; i<ncells_pml_domain_xmax ; i++ ) {
                         int idx_start = zpml_size_in_x-ncells_pml_domain_xmax ;
                         int jdx_start = ncells_pml_ymin;
-                        for( unsigned int j = 0 ; j<n_p[1] ; j++ ) {
+                        for ( int j=0 ; j<n_p[1] ; j++ ) {
                             // i-Dual
                             (*Ex_pml_xmax)(i,j,n_p[2]-1-k) = (*Ex_)(idx_start+i,jdx_start+j,domain_oversize_z+nsolver/2-1-k);
                             (*Dx_pml_xmax)(i,j,n_p[2]-1-k) = (*Dx_)(idx_start+i,jdx_start+j,domain_oversize_z+nsolver/2-1-k);
                         }
-                        for( unsigned int j = 0 ; j<n_d[1] ; j++ ) {
+                        for ( int j=0 ; j<n_d[1] ; j++ ) {
                             // i-Primals
                             (*Ey_pml_xmax)(i,j,n_p[2]-1-k) = (*Ey_)(idx_start+i,jdx_start+j,domain_oversize_z+nsolver/2-1-k);
                             (*Dy_pml_xmax)(i,j,n_p[2]-1-k) = (*Dy_)(idx_start+i,jdx_start+j,domain_oversize_z+nsolver/2-k);
@@ -2239,7 +2261,7 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
                     for ( int i=0 ; i<ncells_pml_domain_xmax ; i++ ) {
                         int idx_start = zpml_size_in_x-ncells_pml_domain_xmax ;
                         int jdx_start = ncells_pml_ymin;
-                        for( unsigned int j = 0 ; j<n_p[1] ; j++ ) {
+                        for ( int j=0 ; j<n_p[1] ; j++ ) {
                             // i-Primals
                             (*Ez_pml_xmax)(i,j,n_d[2]-1-k) = (*Ez_)(idx_start+i,jdx_start+j,domain_oversize_z+nsolver/2-k);
                             (*Dz_pml_xmax)(i,j,n_d[2]-1-k) = (*Dz_)(idx_start+i,jdx_start+j,domain_oversize_z+nsolver/2-k);
@@ -2247,7 +2269,7 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
                             (*Hy_pml_xmax)(i,j,n_d[2]-1-k) = (*Hy_)(idx_start+i,jdx_start+j,domain_oversize_z+nsolver/2-k);
                             (*By_pml_xmax)(i,j,n_d[2]-1-k) = (*By_)(idx_start+i,jdx_start+j,domain_oversize_z+nsolver/2-k);
                         }
-                        for( unsigned int j = 0 ; j<n_d[1] ; j++ ) {
+                        for ( int j=0 ; j<n_d[1] ; j++ ) {
                             // i-Primals
                             (*Hx_pml_xmax)(i,j,n_d[2]-1-k) = (*Hx_)(idx_start+i,jdx_start+j,domain_oversize_z+nsolver/2-k);
                             (*Bx_pml_xmax)(i,j,n_d[2]-1-k) = (*Bx_)(idx_start+i,jdx_start+j,domain_oversize_z+nsolver/2-k);
@@ -2265,13 +2287,13 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
                 if(ncells_pml_ymin != 0){
                     int jdx_start = 0;
                     for ( int j=0 ; j<ncells_pml_domain_ymin ; j++ ) {
-                        for( unsigned int i = 0 ; i<n_p[0]+ncells_pml_xmin+ncells_pml_xmax ; i++ ) {
+                        for ( int i=0 ; i<n_p[0]+ncells_pml_xmin+ncells_pml_xmax ; i++ ) {
                             // j-Primals
                             // j-Duals
                             (*Ey_pml_ymin)(i,j,n_p[2]-1-k) = (*Ey_)(i,jdx_start+j,domain_oversize_z+nsolver/2-1-k);
                             (*Dy_pml_ymin)(i,j,n_p[2]-1-k) = (*Dy_)(i,jdx_start+j,domain_oversize_z+nsolver/2-1-k);
                         }
-                        for( unsigned int i = 0 ; i<n_d[0]+ncells_pml_xmin+ncells_pml_xmax ; i++ ) {
+                        for ( int i=0 ; i<n_d[0]+ncells_pml_xmin+ncells_pml_xmax ; i++ ) {
                             // j-Primals
                             (*Ex_pml_ymin)(i,j,n_p[2]-1-k) = (*Ex_)(i,jdx_start+j,domain_oversize_z+nsolver/2-1-k);
                             (*Dx_pml_ymin)(i,j,n_p[2]-1-k) = (*Dx_)(i,jdx_start+j,domain_oversize_z+nsolver/2-k);
@@ -2289,7 +2311,7 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
                 if(ncells_pml_ymin != 0){
                     int jdx_start = 0;
                     for ( int j=0 ; j<ncells_pml_domain_ymin ; j++ ) {
-                        for( unsigned int i = 0 ; i<n_p[0]+ncells_pml_xmin+ncells_pml_xmax ; i++ ) {
+                        for ( int i=0 ; i<n_p[0]+ncells_pml_xmin+ncells_pml_xmax ; i++ ) {
                             // j-Primals
                             (*Ez_pml_ymin)(i,j,n_d[2]-1-k) = (*Ez_)(i,jdx_start+j,domain_oversize_z+nsolver/2-k);
                             (*Dz_pml_ymin)(i,j,n_d[2]-1-k) = (*Dz_)(i,jdx_start+j,domain_oversize_z+nsolver/2-k);
@@ -2297,7 +2319,7 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
                             (*Hx_pml_ymin)(i,j,n_d[2]-1-k) = (*Hx_)(i,jdx_start+j,domain_oversize_z+nsolver/2-k);
                             (*Bx_pml_ymin)(i,j,n_d[2]-1-k) = (*Bx_)(i,jdx_start+j,domain_oversize_z+nsolver/2-k);
                         }
-                        for( unsigned int i = 0 ; i<n_d[0]+ncells_pml_xmin+ncells_pml_xmax ; i++ ) {
+                        for ( int i=0 ; i<n_d[0]+ncells_pml_xmin+ncells_pml_xmax ; i++ ) {
                             // j-Primals
                             (*Hy_pml_ymin)(i,j,n_d[2]-1-k) = (*Hy_)(i,jdx_start+j,domain_oversize_z+nsolver/2-k);
                             (*By_pml_ymin)(i,j,n_d[2]-1-k) = (*By_)(i,jdx_start+j,domain_oversize_z+nsolver/2-k);
@@ -2316,13 +2338,13 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
                 if(ncells_pml_ymax != 0){
                     for ( int j=0 ; j<ncells_pml_domain_ymax ; j++ ) {
                         int jdx_start = zpml_size_in_y-ncells_pml_domain_ymax ;
-                        for( unsigned int i = 0 ; i<n_p[0]+ncells_pml_xmin+ncells_pml_xmax ; i++ ) {
+                        for ( int i=0 ; i<n_p[0]+ncells_pml_xmin+ncells_pml_xmax ; i++ ) {
                             // j-Primals
                             // j-Dual
                             (*Ey_pml_ymax)(i,j,n_p[2]-1-k) = (*Ey_)(i,jdx_start+j,domain_oversize_z+nsolver/2-1-k);
                             (*Dy_pml_ymax)(i,j,n_p[2]-1-k) = (*Dy_)(i,jdx_start+j,domain_oversize_z+nsolver/2-1-k);
                         }
-                        for( unsigned int i = 0 ; i<n_d[0]+ncells_pml_xmin+ncells_pml_xmax ; i++ ) {
+                        for ( int i=0 ; i<n_d[0]+ncells_pml_xmin+ncells_pml_xmax ; i++ ) {
                             // j-Primals
                             (*Ex_pml_ymax)(i,j,n_p[2]-1-k) = (*Ex_)(i,jdx_start+j,domain_oversize_z+nsolver/2-1-k);
                             (*Dx_pml_ymax)(i,j,n_p[2]-1-k) = (*Dx_)(i,jdx_start+j,domain_oversize_z+nsolver/2-1-k);
@@ -2340,7 +2362,7 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
                 if(ncells_pml_ymax != 0){
                     for ( int j=0 ; j<ncells_pml_domain_ymax ; j++ ) {
                         int jdx_start = zpml_size_in_y-ncells_pml_domain_ymax ;
-                        for( unsigned int i = 0 ; i<n_p[0]+ncells_pml_xmin+ncells_pml_xmax ; i++ ) {
+                        for ( int i=0 ; i<n_p[0]+ncells_pml_xmin+ncells_pml_xmax ; i++ ) {
                             // j-Primals
                             (*Ez_pml_ymax)(i,j,n_d[2]-1-k) = (*Ez_)(i,jdx_start+j,domain_oversize_z+nsolver/2-k);
                             (*Dz_pml_ymax)(i,j,n_d[2]-1-k) = (*Dz_)(i,jdx_start+j,domain_oversize_z+nsolver/2-k);
@@ -2348,7 +2370,7 @@ void ElectroMagnBC3D_PML::apply( ElectroMagn *EMfields, double time_dual, Patch 
                             (*Hx_pml_ymax)(i,j,n_d[2]-1-k) = (*Hx_)(i,jdx_start+j,domain_oversize_z+nsolver/2-k);
                             (*Bx_pml_ymax)(i,j,n_d[2]-1-k) = (*Bx_)(i,jdx_start+j,domain_oversize_z+nsolver/2-k);
                         }
-                        for( unsigned int i = 0 ; i<n_d[0]+ncells_pml_xmin+ncells_pml_xmax ; i++ ) {
+                        for ( int i=0 ; i<n_d[0]+ncells_pml_xmin+ncells_pml_xmax ; i++ ) {
                             // j-Primals
                             (*Hy_pml_ymax)(i,j,n_d[2]-1-k) = (*Hy_)(i,jdx_start+j,domain_oversize_z+nsolver/2-k);
                             (*By_pml_ymax)(i,j,n_d[2]-1-k) = (*By_)(i,jdx_start+j,domain_oversize_z+nsolver/2-k);

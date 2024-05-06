@@ -89,19 +89,13 @@ public:
     void extract_slice_xz( unsigned int iy, Field2D *field );
     void extract_slice_xy( unsigned int iz, Field2D *field );
 
-    Field* clone() override {
-        auto newInstance = new Field3D(dims_);
-        newInstance->name = name;
-        newInstance->copyFrom(this);
-        return newInstance;
-    }
-
 
     virtual double norm2( unsigned int istart[3][2], unsigned int bufsize[3][2] ) override;
-    void put( Field *outField, Params &params, Patch *thisPatch, Patch *outPatch ) override;
-    void add( Field *outField, Params &params, Patch *thisPatch, Patch *outPatch ) override;
-    void get( Field  *inField, Params &params, Patch   *inPatch, Patch *thisPatch ) override;
+    void put( Field *outField, Params &params, SmileiMPI *smpi, Patch *thisPatch, Patch *outPatch ) override;
+    void add( Field *outField, Params &params, SmileiMPI *smpi, Patch *thisPatch, Patch *outPatch ) override;
+    void get( Field  *inField, Params &params, SmileiMPI *smpi, Patch   *inPatch, Patch *thisPatch ) override;
 
+    //!\todo{Comment what are these stuffs (MG for JD)}
     //double *data_3D;
     //! this will present the data as a 3d matrix
     double *** data_3D;

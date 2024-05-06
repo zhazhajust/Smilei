@@ -26,7 +26,7 @@ Radiation::Radiation( Params &params, Species *species, Random * rand )
     one_over_mass_ = 1./species->mass_;
 
     // Normalized Schwinger Electric Field
-    norm_E_Schwinger_ = params.electron_mass*params.c_vacuum_*params.c_vacuum_
+    norm_E_Schwinger_ = params.electron_mass*params.c_vacuum*params.c_vacuum
                         / ( params.red_planck_cst* params.reference_angular_frequency_SI );
 
     // Inverse of norm_E_Schwinger_
@@ -35,10 +35,6 @@ Radiation::Radiation( Params &params, Species *species, Random * rand )
     // Pointer to the local patch random generator
     rand_ = rand;
 
-#ifdef _OMPTASKS
-    new_photons_per_bin_ = new Particles[species->Nbins];
-#endif
-    
     // Dimension for particles
     nDim_          = params.nDim_particle;
 
@@ -71,7 +67,7 @@ void Radiation::computeParticlesChi( Particles &particles,
     std::vector<double> *Epart = &( smpi->dynamics_Epart[ithread] );
     std::vector<double> *Bpart = &( smpi->dynamics_Bpart[ithread] );
 
-    int nparts = smpi->getBufferSize(ithread);
+    int nparts = Epart->size()/3;
     double *Ex = &( ( *Epart )[0*nparts] );
     double *Ey = &( ( *Epart )[1*nparts] );
     double *Ez = &( ( *Epart )[2*nparts] );
@@ -120,40 +116,4 @@ void Radiation::computeParticlesChi( Particles &particles,
                      ( *( Bx+ipart-ipart_ref ) ), ( *( By+ipart-ipart_ref ) ), ( *( Bz+ipart-ipart_ref ) ) );
 
     }
-}
-
-void Radiation::joinNewPhotons(Particles * photons,unsigned int Nbins)
-{
-
-    // if tasks on bins are used for Radiation, join the lists of new photons
-    // created in each bin, to have the list of new photons for this species and patch
-    for( unsigned int ibin = 0 ; ibin < Nbins ; ibin++ ) {
-
-        unsigned int nparticles_to_add = new_photons_per_bin_[ibin].size();
-        photons->createParticles(nparticles_to_add);
-
-        for (unsigned int ipart = 0; ipart < nparticles_to_add ; ipart++){
-            int idNew = (photons->size() - nparticles_to_add) + ipart;
-            
-            for( unsigned int i=0; i<photons->dimension(); i++ ) {
-                photons->position( i, idNew ) = (new_photons_per_bin_[ibin]).position( i, ipart );
-            }
-            for( unsigned int i=0; i<3; i++ ) {
-                photons->momentum( i, idNew ) = (new_photons_per_bin_[ibin]).momentum( i, ipart );
-            }
-            photons->weight( idNew ) = (new_photons_per_bin_[ibin]).weight( ipart );
-            photons->charge( idNew ) = (new_photons_per_bin_[ibin]).charge( ipart );
-
-            if( photons->has_quantum_parameter ) {
-                photons->chi( idNew ) = (new_photons_per_bin_[ibin]).chi( ipart );
-            }
-
-            if( photons->has_Monte_Carlo_process ) {
-                photons->tau( idNew ) = (new_photons_per_bin_[ibin]).tau( ipart );
-            }
-       
-        } // end ipart
-        new_photons_per_bin_[ibin].clear();
-    } // end ibin
-
 }

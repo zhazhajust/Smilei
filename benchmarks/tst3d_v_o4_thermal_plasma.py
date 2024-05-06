@@ -100,7 +100,7 @@ Checkpoints(
 )
 
 DiagFields(
-    every = 40
+    every = 4
 )
 
 DiagScalar(every = 1)

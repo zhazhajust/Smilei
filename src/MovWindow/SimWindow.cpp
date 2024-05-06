@@ -2,9 +2,11 @@
 #include "SimWindow.h"
 #include "Params.h"
 #include "Species.h"
+#ifdef _VECTO
 #include "SpeciesVAdaptiveMixedSort.h"
 #include "SpeciesVAdaptive.h"
 #include "SpeciesV.h"
+#endif
 #include "ElectroMagn.h"
 #include "Interpolator.h"
 #include "Projector.h"
@@ -20,7 +22,6 @@
 #include <fstream>
 #include <limits>
 #include "ElectroMagnBC_Factory.h"
-#include "EnvelopeBC_Factory.h"
 #include "DoubleGrids.h"
 #include "SyncVectorPatch.h"
 
@@ -34,6 +35,7 @@ SimWindow::SimWindow( Params &params )
     // ------------------------
     active = false;
     time_start = numeric_limits<double>::max();
+    time_stop = numeric_limits<double>::max();
     velocity_x = 1.;
     number_of_additional_shifts = 0;
     additional_shifts_time = 0.;
@@ -45,7 +47,6 @@ SimWindow::SimWindow( Params &params )
 #endif
     patch_to_be_created.resize( max_threads );
     patch_particle_created.resize( max_threads );
-    patch_to_be_updated.resize( max_threads );
     
     if( PyTools::nComponents( "MovingWindow" ) ) {
         active = true;
@@ -53,13 +54,14 @@ SimWindow::SimWindow( Params &params )
         TITLE( "Initializing moving window" );
         
         PyTools::extract( "time_start", time_start, "MovingWindow"  );
+        PyTools::extract( "time_stop", time_stop, "MovingWindow"  );
         PyTools::extract( "velocity_x", velocity_x, "MovingWindow"  );
         PyTools::extract( "number_of_additional_shifts", number_of_additional_shifts, "MovingWindow"  );
         PyTools::extract( "additional_shifts_time", additional_shifts_time, "MovingWindow"  );
     }
     
     cell_length_x_   = params.cell_length[0];
-    n_space_x_       = params.patch_size_[0];
+    n_space_x_       = params.n_space[0];
     additional_shifts_iteration = floor(additional_shifts_time / params.timestep + 0.5);
     x_moved = 0.;      //The window has not moved at t=0. Warning: not true anymore for restarts.
     n_moved = 0 ;      //The window has not moved at t=0. Warning: not true anymore for restarts.
@@ -73,6 +75,7 @@ SimWindow::SimWindow( Params &params )
         MESSAGE( 1, "Moving window is active:" );
         MESSAGE( 2, "velocity_x : " << velocity_x );
         MESSAGE( 2, "time_start : " << time_start );
+        MESSAGE( 2, "time_stop : " << time_stop );
         if (number_of_additional_shifts > 0){
             MESSAGE( 2, "number_of_additional_shifts : " << number_of_additional_shifts );
             MESSAGE( 2, "additional_shifts_time : " << additional_shifts_time );
@@ -90,7 +93,7 @@ SimWindow::~SimWindow()
 
 bool SimWindow::isMoving( double time_dual )
 {
-    return active && ( ( time_dual - time_start )*velocity_x > x_moved - number_of_additional_shifts*cell_length_x_*n_space_x_*(time_dual>additional_shifts_time) );
+    return active && (time_dual < time_stop) && ( ( time_dual - time_start )*velocity_x > x_moved - number_of_additional_shifts*cell_length_x_*n_space_x_*(time_dual>additional_shifts_time) );
 }
 
 void SimWindow::shift( VectorPatch &vecPatches, SmileiMPI *smpi, Params &params, unsigned int itime, double time_dual, Region& region )
@@ -108,7 +111,7 @@ void SimWindow::shift( VectorPatch &vecPatches, SmileiMPI *smpi, Params &params,
     unsigned int nSpecies( vecPatches( 0 )->vecSpecies.size() );
     int nmessage( vecPatches.nrequests );
     
-    std::vector<Patch *> delete_patches_, send_patches_;
+    std::vector<Patch *> delete_patches_, update_patches_, send_patches_;
     
 #ifdef _OPENMP
     int my_thread = omp_get_thread_num();
@@ -122,7 +125,6 @@ void SimWindow::shift( VectorPatch &vecPatches, SmileiMPI *smpi, Params &params,
 #endif
     
         ( patch_to_be_created[my_thread] ).clear();
-        ( patch_to_be_updated[my_thread] ).clear();
         ( patch_particle_created[my_thread] ).clear();
         
 #ifndef _NO_MPI_TM
@@ -134,7 +136,7 @@ void SimWindow::shift( VectorPatch &vecPatches, SmileiMPI *smpi, Params &params,
             }
 
             vecPatches_old.resize( nPatches );
-            n_moved += params.patch_size_[0];
+            n_moved += params.n_space[0];
         }
         //Cut off laser before exchanging any patches to avoid deadlock and store pointers in vecpatches_old.
 #ifndef _NO_MPI_TM
@@ -147,7 +149,7 @@ void SimWindow::shift( VectorPatch &vecPatches, SmileiMPI *smpi, Params &params,
         
         
 #ifndef _NO_MPI_TM
-        #pragma omp for schedule(static) private(mypatch)
+        #pragma omp for schedule(static)
 #endif
         for( unsigned int ipatch = 0 ; ipatch < nPatches ; ipatch++ ) {
             mypatch = vecPatches_old[ipatch];
@@ -197,7 +199,7 @@ void SimWindow::shift( VectorPatch &vecPatches, SmileiMPI *smpi, Params &params,
                     mypatch->tmp_MPI_neighbor_[idim][0] = vecPatches_old[mypatch->hindex - h0 ]->MPI_neighbor_[idim][0];
                     mypatch->tmp_MPI_neighbor_[idim][1] = vecPatches_old[mypatch->hindex - h0 ]->MPI_neighbor_[idim][1];
                 }
-                ( patch_to_be_updated[my_thread] ).push_back( mypatch );
+                update_patches_.push_back( mypatch ); // Stores pointers to patches that will need to update some neighbors from tmp_neighbors.
                 
                 //And finally put the patch at the correct rank in vecPatches.
                 vecPatches.patches_[mypatch->hindex - h0 ] = mypatch ;
@@ -208,67 +210,51 @@ void SimWindow::shift( VectorPatch &vecPatches, SmileiMPI *smpi, Params &params,
         // The lists of patches to create and patches to update is also complete.
         
         //Creation of new Patches
+        for( unsigned int j = 0; j < patch_to_be_created[my_thread].size();  j++ ) {
+            //create patch without particle.
 #ifndef _NO_MPI_TM
-    #pragma omp master
-    {
+            #pragma omp critical
 #endif
-        for( unsigned int thread = 0; thread < patch_to_be_created.size();  thread++ ) {
-            for( unsigned int j = 0; j < patch_to_be_created[thread].size();  j++ ) {
-                //create patch without particle.
-                mypatch = PatchesFactory::clone( vecPatches( 0 ), params, smpi, vecPatches.domain_decomposition_, h0 + patch_to_be_created[thread][j], n_moved, false );
-                
-                // Do not receive Xmin condition
-                if( mypatch->isXmin() && mypatch->EMfields->emBoundCond[0] ) {
-                    mypatch->EMfields->emBoundCond[0]->disableExternalFields();
-                }
-                
-                mypatch->finalizeMPIenvironment( params );
-                //Position new patch
-                vecPatches.patches_[patch_to_be_created[thread][j]] = mypatch ;
-                //Receive Patch if necessary
-                if( mypatch->MPI_neighbor_[0][1] != MPI_PROC_NULL ) {
-                    if ( mypatch->Pcoordinates[0]!=params.number_of_patches[0]-1 ) {
-                        // The tag is the patch number in the receiver vector of patches in order to avoid too large tags not supported by some MPI versions.
-                        smpi->recv( mypatch, mypatch->MPI_neighbor_[0][1], ( mypatch->hindex - vecPatches.refHindex_ )*nmessage, params, false );
-                        patch_particle_created[thread][j] = false ; //Mark no needs of particles
-                    }
-                }
-                
-                // Create Xmin condition which could not be received
-                if( mypatch->isXmin() ) {
-                    for( auto &embc:mypatch->EMfields->emBoundCond ) {
-                        if( embc ) {
-                            delete embc;
-                        }
-                    }
-                    mypatch->EMfields->emBoundCond = ElectroMagnBC_Factory::create( params, mypatch );
-                    if (mypatch->EMfields->envelope){
-                        for( auto &embc:mypatch->EMfields->envelope->EnvBoundCond ) {
-                            if( embc ) {
-                                delete embc;
-                            }
-                        }
-                        mypatch->EMfields->envelope->EnvBoundCond = EnvelopeBC_Factory::create( params, mypatch );
-                    }
-
-                    mypatch->EMfields->laserDisabled();
-                    if (!params.multiple_decomposition){
-                        mypatch->EMfields->emBoundCond[0]->apply(mypatch->EMfields, time_dual, mypatch);
-                        if (mypatch->EMfields->envelope) mypatch->EMfields->envelope->EnvBoundCond[0]->apply(mypatch->EMfields->envelope, mypatch->EMfields, mypatch);
-                    }
-                }
-                
-                mypatch->EMfields->laserDisabled();
-                mypatch->EMfields->updateGridSize( params, mypatch );
+            mypatch = PatchesFactory::clone( vecPatches( 0 ), params, smpi, vecPatches.domain_decomposition_, h0 + patch_to_be_created[my_thread][j], n_moved, false );
+            
+            // Do not receive Xmin condition
+            if( mypatch->isXmin() && mypatch->EMfields->emBoundCond[0] ) {
+                mypatch->EMfields->emBoundCond[0]->disableExternalFields();
             }
+            
+            mypatch->finalizeMPIenvironment( params );
+            //Position new patch
+            vecPatches.patches_[patch_to_be_created[my_thread][j]] = mypatch ;
+            //Receive Patch if necessary
+            if( mypatch->MPI_neighbor_[0][1] != MPI_PROC_NULL ) {
+                if ( mypatch->Pcoordinates[0]!=params.number_of_patches[0]-1 ) {
+                    // The tag is the patch number in the receiver vector of patches in order to avoid too large tags not supported by some MPI versions.
+                    smpi->recv( mypatch, mypatch->MPI_neighbor_[0][1], ( mypatch->hindex - vecPatches.refHindex_ )*nmessage, params, false );
+                    patch_particle_created[my_thread][j] = false ; //Mark no needs of particles
+                }
+            }
+            
+            // Create Xmin condition which could not be received
+            if( mypatch->isXmin() ) {
+                for( auto &embc:mypatch->EMfields->emBoundCond ) {
+                    if( embc ) {
+                        delete embc;
+                    }
+                }
+                mypatch->EMfields->emBoundCond = ElectroMagnBC_Factory::create( params, mypatch );
+                mypatch->EMfields->laserDisabled();
+                if (!params.multiple_decomposition)
+                    mypatch->EMfields->emBoundCond[0]->apply(mypatch->EMfields, time_dual, mypatch);
+            }
+            
+            mypatch->EMfields->laserDisabled();
+            mypatch->EMfields->updateGridSize( params, mypatch );
         }
         
         //Wait for sends to be completed
         
 #ifndef _NO_MPI_TM
-    }
-    #pragma omp barrier
-    #pragma omp for schedule(static)
+        #pragma omp for schedule(static)
 #endif
         for( unsigned int ipatch = 0 ; ipatch < nPatches ; ipatch++ ) {
             if( vecPatches_old[ipatch]->MPI_neighbor_[0][0] !=  vecPatches_old[ipatch]->MPI_me_ && vecPatches_old[ipatch]->MPI_neighbor_[0][0] != MPI_PROC_NULL ) {
@@ -277,77 +263,47 @@ void SimWindow::shift( VectorPatch &vecPatches, SmileiMPI *smpi, Params &params,
         }
         
         //Update the correct neighbor values
-#ifndef _NO_MPI_TM
-    #pragma omp master
-    {
-#endif
-        for( unsigned int thread = 0; thread < patch_to_be_updated.size();  thread++ ) {
-            for( unsigned int j=0; j < patch_to_be_updated[thread].size(); j++ ) {
-                mypatch = patch_to_be_updated[thread][j];
-                mypatch->MPI_neighbor_[0][0] = mypatch->tmp_MPI_neighbor_[0][0];
-                mypatch->neighbor_[0][0] = mypatch->tmp_neighbor_[0][0];
-                for( unsigned int idim = 1; idim < params.nDim_field ; idim++ ) {
-                    mypatch->MPI_neighbor_[idim][0] = mypatch->tmp_MPI_neighbor_[idim][0];
-                    mypatch->MPI_neighbor_[idim][1] = mypatch->tmp_MPI_neighbor_[idim][1];
-                    mypatch->neighbor_[idim][0] = mypatch->tmp_neighbor_[idim][0];
-                    mypatch->neighbor_[idim][1] = mypatch->tmp_neighbor_[idim][1];
-                }
-                
-                if( mypatch->isXmin() ) {
-                    for( unsigned int ispec=0 ; ispec<nSpecies ; ispec++ ) {
-                        mypatch->vecSpecies[ispec]->setXminBoundaryCondition();
-                    }
-                }
-                
-                if( mypatch->isXmin() ) {
-                    for( auto &embc:mypatch->EMfields->emBoundCond ) {
-                        if( embc ) {
-                            delete embc;
-                        }
-                    }
-                    mypatch->EMfields->emBoundCond = ElectroMagnBC_Factory::create( params, mypatch );
-                    if (mypatch->EMfields->envelope){
-                        for( auto &embc:mypatch->EMfields->envelope->EnvBoundCond ) {
-                            if( embc ) {
-                                delete embc;
-                            }
-                        }
-                        mypatch->EMfields->envelope->EnvBoundCond = EnvelopeBC_Factory::create( params, mypatch );
-                    }
-
-                    mypatch->EMfields->laserDisabled();
-                    if (!params.multiple_decomposition){
-                        mypatch->EMfields->emBoundCond[0]->apply(mypatch->EMfields, time_dual, mypatch);
-                        if (mypatch->EMfields->envelope) mypatch->EMfields->envelope->EnvBoundCond[0]->apply(mypatch->EMfields->envelope, mypatch->EMfields, mypatch);
-                    }
-                }
-                if( mypatch->wasXmax( params ) ) {
-                    for( auto &embc:mypatch->EMfields->emBoundCond ) {
-                        if( embc ) {
-                            delete embc;
-                        }
-                    }
-                    mypatch->EMfields->emBoundCond = ElectroMagnBC_Factory::create( params, mypatch );
-
-                    if (mypatch->EMfields->envelope){
-                        for( auto &embc:mypatch->EMfields->envelope->EnvBoundCond ) {
-                            if( embc ) {
-                                delete embc;
-                            }
-                        }
-                        mypatch->EMfields->envelope->EnvBoundCond = EnvelopeBC_Factory::create( params, mypatch );
-                    }
-
-                    mypatch->EMfields->laserDisabled();
-                    mypatch->EMfields->updateGridSize( params, mypatch );
-                    
+        for( unsigned int j=0; j < update_patches_.size(); j++ ) {
+            mypatch = update_patches_[j];
+            mypatch->MPI_neighbor_[0][0] = mypatch->tmp_MPI_neighbor_[0][0];
+            mypatch->neighbor_[0][0] = mypatch->tmp_neighbor_[0][0];
+            for( unsigned int idim = 1; idim < params.nDim_field ; idim++ ) {
+                mypatch->MPI_neighbor_[idim][0] = mypatch->tmp_MPI_neighbor_[idim][0];
+                mypatch->MPI_neighbor_[idim][1] = mypatch->tmp_MPI_neighbor_[idim][1];
+                mypatch->neighbor_[idim][0] = mypatch->tmp_neighbor_[idim][0];
+                mypatch->neighbor_[idim][1] = mypatch->tmp_neighbor_[idim][1];
+            }
+            
+            mypatch->updateTagenv( smpi );
+            if( mypatch->isXmin() ) {
+                for( unsigned int ispec=0 ; ispec<nSpecies ; ispec++ ) {
+                    mypatch->vecSpecies[ispec]->setXminBoundaryCondition();
                 }
             }
+            
+            if( mypatch->isXmin() ) {
+                for( auto &embc:mypatch->EMfields->emBoundCond ) {
+                    if( embc ) {
+                        delete embc;
+                    }
+                }
+                mypatch->EMfields->emBoundCond = ElectroMagnBC_Factory::create( params, mypatch );
+                mypatch->EMfields->laserDisabled();
+                if (!params.multiple_decomposition)
+                    mypatch->EMfields->emBoundCond[0]->apply(mypatch->EMfields, time_dual, mypatch);
+            }
+            if( mypatch->wasXmax( params ) ) {
+                for( auto &embc:mypatch->EMfields->emBoundCond ) {
+                    if( embc ) {
+                        delete embc;
+                    }
+                }
+                mypatch->EMfields->emBoundCond = ElectroMagnBC_Factory::create( params, mypatch );
+                mypatch->EMfields->laserDisabled();
+                mypatch->EMfields->updateGridSize( params, mypatch );
+                
+            }
         }
-#ifndef _NO_MPI_TM
-    } // end of master region
-    #pragma omp barrier
-#endif
         
         //Wait for sends to be completed
         for( unsigned int j=0; j < send_patches_.size(); j++ ) {
@@ -380,12 +336,70 @@ void SimWindow::shift( VectorPatch &vecPatches, SmileiMPI *smpi, Params &params,
                             init_space.cell_index_[0] = 0;
                             init_space.cell_index_[1] = 0;
                             init_space.cell_index_[2] = 0;
-                            init_space.box_size_[0]   = params.patch_size_[0];
-                            init_space.box_size_[1]   = params.patch_size_[1];
-                            init_space.box_size_[2]   = params.patch_size_[2];
+                            init_space.box_size_[0]   = params.n_space[0];
+                            init_space.box_size_[1]   = params.n_space[1];
+                            init_space.box_size_[2]   = params.n_space[2];
                             
                             particle_creator.create( init_space, params, mypatch, 0 );
                             
+                            // mypatch->vecSpecies[ispec]->ParticleCreator( params.n_space, params, mypatch, 0 );
+
+                            /*#ifdef _VECTO
+                                                    // Classical vectorized mode
+                                                    if (params.vectorization_mode == "on")
+                                                    {
+                                                        if ( dynamic_cast<SpeciesV*>(mypatch->vecSpecies[ispec]) )
+                                                            dynamic_cast<SpeciesV*>(mypatch->vecSpecies[ispec])->computeParticleCellKeys(params);
+                                                        mypatch->vecSpecies[ispec]->sortParticles(params);
+                                                    }
+                                                    // First adaptive vectorization mode
+                                                    else if (params.vectorization_mode == "adaptive_mixed_sort")
+                                                    {
+                                                        if ( dynamic_cast<SpeciesVAdaptiveMixedSort*>(mypatch->vecSpecies[ispec]) )
+                                                        {
+                                                            dynamic_cast<SpeciesVAdaptiveMixedSort*>(mypatch->vecSpecies[ispec])->configuration(params, mypatch);
+                                                        }
+                                                    }
+                                                    // Second adaptive vectorization mode
+                                                    else if (params.vectorization_mode == "adaptive")
+                                                    {
+                                                        if ( dynamic_cast<SpeciesVAdaptive*>(mypatch->vecSpecies[ispec]) )
+                                                            dynamic_cast<SpeciesVAdaptive*>(mypatch->vecSpecies[ispec])->computeParticleCellKeys(params);
+                                                        mypatch->vecSpecies[ispec]->sortParticles(params);
+                                                    }
+                                                }
+                            #endif
+                                                // We define the IDs of the new particles
+                                                for( unsigned int idiag=0; idiag<vecPatches.localDiags.size(); idiag++ )
+                                                    if( DiagnosticTrack* track = dynamic_cast<DiagnosticTrack*>(vecPatches.localDiags[idiag]) )
+                                                        track->setIDs( mypatch );
+                            #ifdef _VECTO
+                                            }
+                                            // Patches that have received particles from another patch
+                                            // without the creation of new particles
+                                            else // (patch_particle_created[ithread][j] == false)
+                                            {
+                                                for (unsigned int ispec=0 ; ispec<nSpecies ; ispec++)
+                                                {
+                                                    // For the adaptive vectorization, we partially reconfigure the patch
+                                                    // We do not have to sort, but operators may have to be reconfigured
+                                                    // First adaptive vectorization mode:
+                                                    if (params.vectorization_mode == "adaptive_mixed_sort") {
+                                                        if ( dynamic_cast<SpeciesVAdaptiveMixedSort*>(mypatch->vecSpecies[ispec]) )
+                                                        {
+                                                            dynamic_cast<SpeciesVAdaptiveMixedSort*>(mypatch->vecSpecies[ispec])->computeParticleCellKeys(params);
+                                                            dynamic_cast<SpeciesVAdaptiveMixedSort*>(mypatch->vecSpecies[ispec])->reconfigure_operators(params, mypatch);
+                                                        }
+                                                    }
+                                                    // Second adaptive vectorization mode:
+                                                    else if (params.vectorization_mode == "adaptive")
+                                                    {
+                                                        if ( dynamic_cast<SpeciesVAdaptive*>(mypatch->vecSpecies[ispec]) )
+                                                        {
+                                                            dynamic_cast<SpeciesVAdaptive*>(mypatch->vecSpecies[ispec])->computeParticleCellKeys(params);
+                                                        }
+                                                    }
+                            #endif*/
                         }
                         
                         mypatch->EMfields->applyExternalFields( mypatch );
@@ -402,8 +416,8 @@ void SimWindow::shift( VectorPatch &vecPatches, SmileiMPI *smpi, Params &params,
 #endif
         
         //Fill necessary patches with particles
-        if( ( params.vectorization_mode == "on" ) ) {
-
+#ifdef _VECTO
+        if( ( params.vectorization_mode == "on" ) || ( params.cell_sorting ) ) {
             //#pragma omp master
             //{
 #ifndef _NO_MPI_TM
@@ -418,7 +432,7 @@ void SimWindow::shift( VectorPatch &vecPatches, SmileiMPI *smpi, Params &params,
                     // If new particles are required
                         for( unsigned int ispec=0 ; ispec<nSpecies ; ispec++ ) {
                             mypatch->vecSpecies[ispec]->computeParticleCellKeys( params );
-                            mypatch->vecSpecies[ispec]->sortParticles( params );
+                            mypatch->vecSpecies[ispec]->sortParticles( params , mypatch);
                         }
                 } // end j loop
             } // End ithread loop
@@ -475,7 +489,7 @@ void SimWindow::shift( VectorPatch &vecPatches, SmileiMPI *smpi, Params &params,
                         for( unsigned int ispec=0 ; ispec<nSpecies ; ispec++ ) {
                             mypatch->vecSpecies[ispec]->computeParticleCellKeys( params );
                             mypatch->vecSpecies[ispec]->configuration( params, mypatch );
-                            mypatch->vecSpecies[ispec]->sortParticles( params );
+                            mypatch->vecSpecies[ispec]->sortParticles( params, mypatch );
                             
                         }
                     }
@@ -492,6 +506,7 @@ void SimWindow::shift( VectorPatch &vecPatches, SmileiMPI *smpi, Params &params,
                 } // end j loop
             } // End ithread loop
         }
+#endif
         
         // Diagnostic Track Particles
 #ifndef _NO_MPI_TM
@@ -517,7 +532,7 @@ void SimWindow::shift( VectorPatch &vecPatches, SmileiMPI *smpi, Params &params,
         #pragma omp single nowait
 #endif
         {
-            x_moved += cell_length_x_*params.patch_size_[0];
+            x_moved += cell_length_x_*params.n_space[0];
             vecPatches.updateFieldList( smpi ) ;
             //update list fields for species diag too ??
             
@@ -635,37 +650,25 @@ void SimWindow::shift( VectorPatch &vecPatches, SmileiMPI *smpi, Params &params,
 
 }
 
-void SimWindow::operate(Region& region,  VectorPatch&, SmileiMPI*, Params& params, double time_dual)
+void SimWindow::operate(Region& region,  VectorPatch& vecPatches, SmileiMPI* smpi, Params& params, double time_dual)
 {
-    region.patch_->exchangeField_movewin( region.patch_->EMfields->Ex_, params.patch_size_[0] );
-    region.patch_->exchangeField_movewin( region.patch_->EMfields->Ey_, params.patch_size_[0] );
-    region.patch_->exchangeField_movewin( region.patch_->EMfields->Ez_, params.patch_size_[0] );
+    region.patch_->exchangeField_movewin( region.patch_->EMfields->Ex_, params.n_space[0] );
+    region.patch_->exchangeField_movewin( region.patch_->EMfields->Ey_, params.n_space[0] );
+    region.patch_->exchangeField_movewin( region.patch_->EMfields->Ez_, params.n_space[0] );
     
     if (region.patch_->EMfields->Bx_->data_!= region.patch_->EMfields->Bx_m->data_) {
-        region.patch_->exchangeField_movewin( region.patch_->EMfields->Bx_, params.patch_size_[0] );
-        region.patch_->exchangeField_movewin( region.patch_->EMfields->By_, params.patch_size_[0] );
-        region.patch_->exchangeField_movewin( region.patch_->EMfields->Bz_, params.patch_size_[0] );
+        region.patch_->exchangeField_movewin( region.patch_->EMfields->Bx_, params.n_space[0] );
+        region.patch_->exchangeField_movewin( region.patch_->EMfields->By_, params.n_space[0] );
+        region.patch_->exchangeField_movewin( region.patch_->EMfields->Bz_, params.n_space[0] );
     }
     
-    region.patch_->exchangeField_movewin( region.patch_->EMfields->Bx_m, params.patch_size_[0] );
-    region.patch_->exchangeField_movewin( region.patch_->EMfields->By_m, params.patch_size_[0] );
-    region.patch_->exchangeField_movewin( region.patch_->EMfields->Bz_m, params.patch_size_[0] );
+    region.patch_->exchangeField_movewin( region.patch_->EMfields->Bx_m, params.n_space[0] );
+    region.patch_->exchangeField_movewin( region.patch_->EMfields->By_m, params.n_space[0] );
+    region.patch_->exchangeField_movewin( region.patch_->EMfields->Bz_m, params.n_space[0] );
 
     if (params.is_spectral) {
-        region.patch_->exchangeField_movewin( region.patch_->EMfields->rho_, params.patch_size_[0] );
-        region.patch_->exchangeField_movewin( region.patch_->EMfields->rhoold_, params.patch_size_[0] );
-    }
-
-    for( unsigned int bcId=2; bcId<2*params.nDim_field; bcId++ ){
-        if( (dynamic_cast<ElectroMagnBC2D_PML *>( region.patch_->EMfields->emBoundCond[bcId] ) || dynamic_cast<ElectroMagnBC3D_PML *>( region.patch_->EMfields->emBoundCond[bcId] )) ){
-            if( dynamic_cast<ElectroMagnBC2D_PML *>( region.patch_->EMfields->emBoundCond[bcId] )){
-                ElectroMagnBC2D_PML *embc = static_cast<ElectroMagnBC2D_PML *>( region.patch_->EMfields->emBoundCond[bcId] );
-                exchangePML_movewin( region, embc, params.patch_size_[0] );
-            } else {
-                ElectroMagnBC3D_PML *embc = static_cast<ElectroMagnBC3D_PML *>( region.patch_->EMfields->emBoundCond[bcId] );
-                exchangePML_movewin( region, embc, params.patch_size_[0] );
-            }
-        }
+        region.patch_->exchangeField_movewin( region.patch_->EMfields->rho_, params.n_space[0] );
+        region.patch_->exchangeField_movewin( region.patch_->EMfields->rhoold_, params.n_space[0] );
     }
 
     //DoubleGrids::syncFieldsOnRegion( vecPatches, region, params, smpi );
@@ -689,47 +692,28 @@ void SimWindow::operate(Region& region,  VectorPatch&, SmileiMPI*, Params& param
 }
 
 
-void SimWindow::operate(Region& region,  VectorPatch&, SmileiMPI*, Params& params, double time_dual, unsigned int nmodes)
+void SimWindow::operate(Region& region,  VectorPatch& vecPatches, SmileiMPI* smpi, Params& params, double time_dual, unsigned int nmodes)
 {
     ElectroMagnAM * region_fields = static_cast<ElectroMagnAM *>( region.patch_->EMfields );
    
     for (unsigned int imode = 0; imode < nmodes; imode++){
-        region.patch_->exchangeField_movewin( region_fields->El_[imode], params.patch_size_[0] );
-        region.patch_->exchangeField_movewin( region_fields->Er_[imode], params.patch_size_[0] );
-        region.patch_->exchangeField_movewin( region_fields->Et_[imode], params.patch_size_[0] );
+        region.patch_->exchangeField_movewin( region_fields->El_[imode], params.n_space[0] );
+        region.patch_->exchangeField_movewin( region_fields->Er_[imode], params.n_space[0] );
+        region.patch_->exchangeField_movewin( region_fields->Et_[imode], params.n_space[0] );
         
         if (region_fields->Bl_[imode]->cdata_!= region_fields->Bl_m[imode]->cdata_) {
-            region.patch_->exchangeField_movewin( region_fields->Bl_[imode], params.patch_size_[0] );
-            region.patch_->exchangeField_movewin( region_fields->Br_[imode], params.patch_size_[0] );
-            region.patch_->exchangeField_movewin( region_fields->Bt_[imode], params.patch_size_[0] );
+            region.patch_->exchangeField_movewin( region_fields->Bl_[imode], params.n_space[0] );
+            region.patch_->exchangeField_movewin( region_fields->Br_[imode], params.n_space[0] );
+            region.patch_->exchangeField_movewin( region_fields->Bt_[imode], params.n_space[0] );
         }
 
-        region.patch_->exchangeField_movewin( region_fields->Bl_m[imode], params.patch_size_[0] );
-        region.patch_->exchangeField_movewin( region_fields->Br_m[imode], params.patch_size_[0] );
-        region.patch_->exchangeField_movewin( region_fields->Bt_m[imode], params.patch_size_[0] );
+        region.patch_->exchangeField_movewin( region_fields->Bl_m[imode], params.n_space[0] );
+        region.patch_->exchangeField_movewin( region_fields->Br_m[imode], params.n_space[0] );
+        region.patch_->exchangeField_movewin( region_fields->Bt_m[imode], params.n_space[0] );
 
         if (params.is_spectral) {
-            region.patch_->exchangeField_movewin( region_fields->rho_AM_[imode], params.patch_size_[0] );
-            region.patch_->exchangeField_movewin( region_fields->rho_old_AM_[imode], params.patch_size_[0] );
-        }
-
-        if( dynamic_cast<ElectroMagnBCAM_PML *>( region.patch_->EMfields->emBoundCond[3] )){
-            ElectroMagnBCAM_PML *embc = static_cast<ElectroMagnBCAM_PML *>( region_fields->emBoundCond[3] );
-            if (embc->Hl_[imode]) {
-                region.patch_->exchangeField_movewin( embc->Hl_[imode], params.patch_size_[0] );
-                region.patch_->exchangeField_movewin( embc->Hr_[imode], params.patch_size_[0] );
-                region.patch_->exchangeField_movewin( embc->Ht_[imode], params.patch_size_[0] );
-                region.patch_->exchangeField_movewin( embc->Bl_[imode], params.patch_size_[0] );
-                region.patch_->exchangeField_movewin( embc->Br_[imode], params.patch_size_[0] );
-                region.patch_->exchangeField_movewin( embc->Bt_[imode], params.patch_size_[0] );
-                region.patch_->exchangeField_movewin( embc->El_[imode], params.patch_size_[0] );
-                region.patch_->exchangeField_movewin( embc->Er_[imode], params.patch_size_[0] );
-                region.patch_->exchangeField_movewin( embc->Et_[imode], params.patch_size_[0] );
-                region.patch_->exchangeField_movewin( embc->Dl_[imode], params.patch_size_[0] );
-                region.patch_->exchangeField_movewin( embc->Dr_[imode], params.patch_size_[0] );
-                region.patch_->exchangeField_movewin( embc->Dt_[imode], params.patch_size_[0] );
-            }
-
+            region.patch_->exchangeField_movewin( region_fields->rho_AM_[imode], params.n_space[0] );
+            region.patch_->exchangeField_movewin( region_fields->rho_old_AM_[imode], params.n_space[0] );
         }
     }
 
@@ -750,22 +734,3 @@ void SimWindow::operate(Region& region,  VectorPatch&, SmileiMPI*, Params& param
     //    region.identify_missing_patches( smpi, vecPatches, params );
     //}
 }
-
-template <typename Tpml>
-void  SimWindow::exchangePML_movewin( Region& region, Tpml embc, int clrw ) {
-                if (embc->Hx_) {
-                    region.patch_->exchangeField_movewin( embc->Hx_, clrw );
-                    region.patch_->exchangeField_movewin( embc->Hy_, clrw );
-                    region.patch_->exchangeField_movewin( embc->Hz_, clrw );
-                    region.patch_->exchangeField_movewin( embc->Bx_, clrw );
-                    region.patch_->exchangeField_movewin( embc->By_, clrw );
-                    region.patch_->exchangeField_movewin( embc->Bz_, clrw );
-                    region.patch_->exchangeField_movewin( embc->Ex_, clrw );
-                    region.patch_->exchangeField_movewin( embc->Ey_, clrw );
-                    region.patch_->exchangeField_movewin( embc->Ez_, clrw );
-                    region.patch_->exchangeField_movewin( embc->Dx_, clrw );
-                    region.patch_->exchangeField_movewin( embc->Dy_, clrw );
-                    region.patch_->exchangeField_movewin( embc->Dz_, clrw );
-                }
-}
-

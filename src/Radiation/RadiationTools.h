@@ -10,7 +10,6 @@
 #define RADIATIONTOOLS_H
 
 #include <cmath>
-#include "Table.h"
 
 class RadiationTools {
 
@@ -20,11 +19,11 @@ class RadiationTools {
         //! approximation formulae
         //! \param particle_chi particle quantum parameter
         //#pragma omp declare simd
-        // static inline double __attribute__((always_inline)) computeRidgersFit( double particle_chi )
-        // {
-        //     return std::pow( 1.0 + 4.8*( 1.0+particle_chi )*std::log( 1.0 + 1.7*particle_chi )
-        //                 + 2.44*particle_chi*particle_chi, -2.0/3.0 );
-        // };
+        static inline double __attribute__((always_inline)) computeRidgersFit( double particle_chi )
+        {
+            return std::pow( 1.0 + 4.8*( 1.0+particle_chi )*std::log( 1.0 + 1.7*particle_chi )
+                        + 2.44*particle_chi*particle_chi, -2.0/3.0 );
+        };
 
         // -----------------------------------------------------------------------------
         //! Return the value of the function h(particle_chi) of Niel et al.
@@ -35,12 +34,12 @@ class RadiationTools {
         static inline double __attribute__((always_inline)) getHNielFitOrder10(double particle_chi)
         {
             // Max relative error ~2E-4
-            const double logchi1 = std::log(particle_chi);
-            const double logchi2 = logchi1 * logchi1;
-            const double logchi3 = logchi2 * logchi1;
-            const double logchi4 = logchi3 * logchi1;
-            const double logchi5 = logchi4 * logchi1;
-            return std::exp(-3.231764974833856e-08 * logchi5*logchi5
+            double logchi1 = log(particle_chi);
+            double logchi2 = logchi1 * logchi1;
+            double logchi3 = logchi2 * logchi1;
+            double logchi4 = logchi3 * logchi1;
+            double logchi5 = logchi4 * logchi1;
+            return exp(-3.231764974833856e-08 * logchi5*logchi5
                        -7.574417415366786e-07 * logchi5*logchi4
                        -5.437005218419013e-06 * logchi5*logchi3
                        -4.359062260446135e-06 * logchi5*logchi2
@@ -62,11 +61,11 @@ class RadiationTools {
         static inline double __attribute__((always_inline)) getHNielFitOrder5(double particle_chi)
         {
 
-            const double logchi1 = std::log(particle_chi);
-            const double logchi2 = logchi1 * logchi1;
-            const double logchi3 = logchi2 * logchi1;
+            double logchi1 = log(particle_chi);
+            double logchi2 = logchi1 * logchi1;
+            double logchi3 = logchi2 * logchi1;
             // Max relative error ~0.02
-            return std::exp(+1.399937206900322e-04 * logchi3*logchi2
+            return exp(+1.399937206900322e-04 * logchi3*logchi2
                        +3.123718241260330e-03 * logchi3*logchi1
                        +1.096559086628964e-02 * logchi3
                        -1.733977278199592e-01 * logchi2
@@ -82,11 +81,11 @@ class RadiationTools {
         // -----------------------------------------------------------------------------
         static inline double __attribute__((always_inline)) getHNielFitRidgers(double particle_chi)
         {
-            const double chi2 = particle_chi * particle_chi;
-            const double chi3 = chi2 * particle_chi;
+            double chi2 = particle_chi * particle_chi;
+            double chi3 = chi2 * particle_chi;
             return chi3*1.9846415503393384
                 *std::pow(
-                    1.0 + (1. + 4.528*particle_chi)*std::log(1.+12.29*particle_chi) + 4.632*chi2
+                    1.0 + (1. + 4.528*particle_chi)*log(1.+12.29*particle_chi) + 4.632*chi2
                     ,-7./6.
                 );
         }
@@ -97,7 +96,7 @@ class RadiationTools {
         //#pragma omp declare simd
         static inline double __attribute__((always_inline)) computeGRidgers(double particle_chi)
         {
-            return std::pow(1. + 4.8*(1.0+particle_chi)*std::log(1. + 1.7*particle_chi)
+            return std::pow(1. + 4.8*(1.0+particle_chi)*log(1. + 1.7*particle_chi)
                        + 2.44*particle_chi*particle_chi,-2./3.);
         };
 
@@ -110,7 +109,7 @@ class RadiationTools {
             if (nu<0.1)      return 2.149528241483088*std::pow(nu,-0.6666666666666667) - 1.813799364234217;
             else if (nu>10)  return 1.253314137315500*std::pow(nu,-0.5)*exp(-nu);
             else {
-                const double lognu = std::log(nu);
+                double lognu = log(nu);
                 double lognu_power_n = lognu;
                 double f = -4.341018460806052e-01 - 1.687909081004528e+00 * lognu_power_n;
                 lognu_power_n *= lognu;
@@ -125,7 +124,7 @@ class RadiationTools {
                 lognu_power_n *= lognu;
                 f -= 1.042081355552157e-02 * lognu_power_n; // n=5
 
-                return std::exp(f);
+                return exp(f);
 
                 /*return exp(-1.042081355552157e-02 * pow(lognu,5)
                            -5.349995695960174e-02 * pow(lognu,4)
@@ -145,7 +144,7 @@ class RadiationTools {
             if (nu<0.05)     return 1.074764120720013*std::pow(nu,-0.6666666666666667);
             else if (nu>10)  return 1.253314137315500*std::pow(nu,-0.5)*exp(-nu);
             else {
-                const double lognu = std::log(nu);
+                double lognu = log(nu);
                 double lognu_power_n = lognu;
                 double f = -7.121012104149862e-01 - 1.539212709860801e+00 * lognu_power_n;
                 lognu_power_n *= lognu;
@@ -160,7 +159,7 @@ class RadiationTools {
                 lognu_power_n *= lognu;
                 f -= 7.694562217592761e-03 * lognu_power_n; //n=5
 
-                return std::exp(f);
+                return exp(f);
 
                 /*return exp(-7.694562217592761e-03 * pow(lognu,5)
                            -5.412029310872778e-02 * pow(lognu,4)
@@ -187,11 +186,11 @@ class RadiationTools {
             }
             else if (nu>10)
             {
-                return (1.+cst)*1.253314137315500*std::exp(-nu)/std::sqrt(nu);
+                return (1.+cst)*1.253314137315500*exp(-nu)/sqrt(nu);
             }
             else
             {
-                const double lognu = std::log(nu);
+                double lognu = log(nu);
                 double lognu_power_n = lognu;
 
                 f1 = - 4.364684279797524e-01;
@@ -216,7 +215,7 @@ class RadiationTools {
                 f2 -= 7.694562217592761e-03 * lognu_power_n; //n=5
 
 
-                return std::exp(f1)+cst*std::exp(f2);
+                return exp(f1)+cst*exp(f2);
             }
         }
 

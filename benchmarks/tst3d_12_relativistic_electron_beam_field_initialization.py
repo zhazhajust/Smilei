@@ -49,7 +49,7 @@ Main(
     interpolation_order = 2,
 
     timestep = dt,
-    simulation_time = dt*5, 
+    simulation_time = dt*1, 
 
     cell_length  = [dx, dtrans, dtrans],
     grid_length = [ Lx,  Ltrans, Ltrans],
@@ -69,7 +69,6 @@ Main(
     solve_relativistic_poisson = True,
     relativistic_poisson_max_iteration = 50000,    
     print_every = 100,
-    use_BTIS3_interpolation = True,
 
 )
 
@@ -97,7 +96,7 @@ Species(
     charge = -1.0,
     charge_density = nbunch_,
     mean_velocity = [beta, 0.0, 0.0], 
-    pusher = "borisBTIS3",
+    pusher = "boris",
     time_frozen = 0.0,
     boundary_conditions = [
        ["remove", "remove"],
@@ -110,17 +109,16 @@ Species(
 list_fields = ['Ex','Ey','Ez','Bx','By','Bz','Rho','Jx','Jy']
 
 DiagFields(
-    every = 3,
+    every = 200,
     fields = list_fields
 )
 
-list_fields_Probes = ['Ex','Ey','Ez','Bx','By','Bz','Rho','ByBTIS3','BzBTIS3']
+
 
 DiagProbe(
-    every = 3,
+    every = 200,
     origin   = [0., 0.,ntrans*dtrans/2.],
     corners  = [ [nx*dx,0.,ntrans*dtrans/2.], [0,ntrans*dtrans,ntrans*dtrans/2.] ],
-    number   = [nx, ntrans],
-    fields = list_fields_Probes,
+    number   = [nx, ntrans]
 )
 

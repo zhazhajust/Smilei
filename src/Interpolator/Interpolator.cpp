@@ -8,3 +8,7 @@
 
 using namespace std;
 
+Interpolator::Interpolator( Params &params, Patch *patch )
+{
+}
+

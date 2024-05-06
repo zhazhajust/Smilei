@@ -4,18 +4,19 @@ class Display(object):
     """
     def __init__(self):
         
+        from os import get_terminal_size
+        
         self.terminal_mode_ = True
         
         # terminal properties for custom display
         try:
-            from os import get_terminal_size
             self.term_size_ = get_terminal_size()
         except:
             self.term_size_ = [0,0];
             self.terminal_mode_ = False
         
         # Used in a terminal
-        if self.terminal_mode_:
+        if (self.terminal_mode_):
             
             self.seperator_length_ = self.term_size_[0];
             
@@ -185,9 +186,10 @@ def matchesWithReference(data, expected_data, data_name, precision, error_type="
         print( e )
     return False
 
-_dataNotMatching = False
 
 class Validation(object):
+    
+    _dataNotMatching = False
     
     def __init__(self, **kwargs):
         # Obtain options
@@ -326,7 +328,6 @@ class Validation(object):
         self.sync()
         INITIAL_DIRECTORY = getcwd()
         
-        global _dataNotMatching
         _dataNotMatching = False
         for BENCH in self.list_benchmarks():
             SMILEI_BENCH = self.smilei_path.benchmarks + BENCH
@@ -508,7 +509,8 @@ class Validation(object):
                 Validate = self.CompareToReference(self.smilei_path.references, BENCH)
                 execfile(validation_script, {"Validate":Validate})
                 if _dataNotMatching:
-                    break
+                    chdir(INITIAL_DIRECTORY)
+                    exit(1)
             
             # Clean workdirs, goes here only if succeeded
             chdir(self.smilei_path.workdirs)
@@ -516,12 +518,11 @@ class Validation(object):
             if options.verbose:
                 print( "")
         
-        chdir(INITIAL_DIRECTORY)
         if _dataNotMatching:
             display.error( "Errors detected")
-            exit(1)
         else:
             display.positive( "Everything passed")
+        chdir(INITIAL_DIRECTORY)
     
     
     def list_benchmarks(self):
@@ -560,8 +561,9 @@ class Validation(object):
             import pickle
             from os.path import getsize
             from os import remove
+            from sys import exit
             with open(self.reference_file, "wb") as f:
-                pickle.dump(self.data, f)
+                pickle.dump(self.data, f, protocol=2)
             size = getsize(self.reference_file)
             if size > 1000000:
                 print("Reference file is too large ("+str(size)+"B) - suppressing ...")
@@ -574,7 +576,6 @@ class Validation(object):
             self.ref_data = loadReference(references_path, bench_name)
         
         def __call__(self, data_name, data, precision=None, error_type="absolute_error"):
-            global _dataNotMatching
             from sys import exit
             # verify the name is in the reference
             if data_name not in self.ref_data.keys():
@@ -596,7 +597,6 @@ class Validation(object):
             self.ref_data = loadReference(references_path, bench_name)
         
         def __call__(self, data_name, data, precision=None, error_type="absolute_error"):
-            global _dataNotMatching
             import matplotlib.pyplot as plt
             from numpy import array
             plt.ion()

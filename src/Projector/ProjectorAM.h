@@ -19,11 +19,11 @@ public:
     
     virtual void mv_win( unsigned int shift )
     {
-        i_domain_begin_+=shift;
+        i_domain_begin+=shift;
     }
     virtual void setMvWinLimits( unsigned int shift )
     {
-        i_domain_begin_ = shift;
+        i_domain_begin = shift;
     }
     
 protected:
@@ -32,18 +32,15 @@ protected:
     //! Inverse of the spatial step 1/dx
     double dl_inv_;
     double dr_inv_;
-    double dl_ov_dt_;
-    double dr_ov_dt_;
+    double dl_ov_dt;
+    double dr_ov_dt;
     double one_ov_dt;
-    int i_domain_begin_;
-    int j_domain_begin_;
-    int nscellr_;
-    unsigned int Nmode_;
-    unsigned int nprimr_, npriml_;
-    int oversize_[2];
-    double dq_inv_[2];
+    int i_domain_begin;
+    int j_domain_begin;
+    unsigned int Nmode;
+    unsigned int nprimr, npriml, oversizeR;
     //! Inverse radius
-    double *invR_, *invRd_;
+    double *invR, *invRd;
     
 };
 

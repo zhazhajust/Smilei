@@ -18,21 +18,21 @@ public:
     friend std::ostream &operator<<( std::ostream &os, const Particle &part );
     
 private:
-    //! particle position
+    //! array containing the particle position
     std::vector<double> Position;
-    //! particle former (old) position
+    //! array containing the particle former (old) positions
     std::vector<double> Position_old;
-    //! particle momentum
+    //! array containing the particle moments
     std::vector<double>  Momentum;
-    //! particle weight: equivalent to a density normalized to the number of macro-particles per cell
+    //! containing the particle weight: equivalent to a charge density
     double Weight;
-    //! particle quantum parameter
+    //! containing the particle quantum parameter
     double Chi;
-    //! particle optical depth for Monte-Carlo processes
+    //! containing the particle optical depth
     double Tau;
-    //! particle charge state
+    //! charge state of the particle (multiples of e>0)
     short Charge;
-    //! particle Id
+    //! Id of the particle
     uint64_t Id;
 };
 

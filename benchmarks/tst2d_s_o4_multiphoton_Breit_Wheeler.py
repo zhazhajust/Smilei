@@ -107,10 +107,6 @@ ExternalField(
     field = "Bz",
     profile = constant(B)
 )
-ExternalField(
-    field = "Bz_m",
-    profile = constant(B)
-)
 
 # ----------------------------------------------------------------------------------------
 # List of species

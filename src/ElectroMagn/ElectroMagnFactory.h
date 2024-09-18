@@ -101,6 +101,43 @@ public:
         }
 
         // -----------------
+        // PartExtFields properties
+        // -----------------
+        unsigned int part_ext_field_number=PyTools::nComponents( "PartExternalField" );
+        if( first_creation && part_ext_field_number > 0) {
+            TITLE("Initializing External fields" );
+        }
+        for( unsigned int n_extfield = 0; n_extfield < part_ext_field_number; n_extfield++ ) {
+            PartExtField extField;
+            PyObject *profile;
+            PyTools::extract( "field", extField.field, "PartExternalField", n_extfield );
+            // Now import the profile
+            std::ostringstream name( "" );
+            name << "PartExternalField[" << n_extfield <<"].profile";
+            if( !PyTools::extract_pyProfile( "profile", profile, "PartExternalField", n_extfield ) ) {
+                ERROR( "PartExternalField #"<<n_extfield<<": parameter 'profile' not understood" );
+            }
+            extField.profile = new Profile( profile, params.nDim_field, name.str(), params, true, true );
+            // Find which index the field is in the allFields vector
+            extField.index = 1000;
+            for( unsigned int ifield=0; ifield<EMfields->allFields.size(); ifield++ ) {
+                if( EMfields->allFields[ifield]
+                    && extField.field==EMfields->allFields[ifield]->name ) {
+                    extField.index = ifield;
+                    break;
+                }
+            }
+            if( extField.index > EMfields->allFields.size()-1 ) {
+                ERROR( "ExternalField #"<<n_extfield<<": field "<<extField.field<<" not found" );
+            }
+
+            if( first_creation ) {
+                MESSAGE( 1, "External field " << extField.field << ": " << extField.profile->getInfo() );
+            }
+            EMfields->partExtFields.push_back( extField );
+        }
+
+        // -----------------
         // PrescribedFields properties
         // -----------------
         unsigned int prescribed_field_number = PyTools::nComponents( "PrescribedField" );
@@ -286,6 +323,17 @@ public:
             extField.profile = EMfields->extFields[n_extfield].profile;
             extField.index   = EMfields->extFields[n_extfield].index;
             newEMfields->extFields.push_back( extField );
+        }
+
+        // -----------------
+        // Clone PartExternalFields properties
+        // -----------------
+        for( unsigned int n_extfield = 0; n_extfield < EMfields->partExtFields.size(); n_extfield++ ) {
+            PartExtField extField;
+            extField.field   = EMfields->partExtFields[n_extfield].field;
+            extField.profile = EMfields->partExtFields[n_extfield].profile;
+            extField.index   = EMfields->partExtFields[n_extfield].index;
+            newEMfields->partExtFields.push_back( extField );
         }
         
         // -----------------

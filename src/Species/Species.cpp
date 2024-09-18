@@ -742,6 +742,8 @@ void Species::dynamics( double time_dual,
             smpi->traceEventIfDiagTracing(diag_PartEventTracing, Tools::getOMPThreadNum(),1,0);
             patch->stopFineTimer(interpolation_timer_id_);
 
+            Interp->externalMagneticField(EMfields, *particles, smpi, ibin, ithread, nDim_particle);
+
             // Ionization
             if( Ionize ) {
 
@@ -1283,6 +1285,8 @@ void Species::dynamicsTasks( double time_dual, unsigned int ispec,
                     vector<vector<double>> pold;
                     particles->prepareInterpolatedFields( pold, start, n );
                     
+                    Interp->externalMagneticField(EMfields, *particles, smpi, ibin, ithread, nDim_particle);
+
                     // Push the particles and the photons
                     ( *Push )( *particles, smpi, start, stop, buffer_id );
                     //particles->testMove( particles->first_index[ibin], particles->last_index[ibin], params );
@@ -2234,6 +2238,10 @@ void Species::compress(SmileiMPI *smpi, int ithread, bool compute_cell_keys) {
     double *const __restrict__ By = &( ( smpi->dynamics_Bpart[ithread] )[1*nparts] );
     double *const __restrict__ Bz = &( ( smpi->dynamics_Bpart[ithread] )[2*nparts] );
 
+    double *const __restrict__ extBx = &( ( smpi->dynamics_external_Bpart[ithread] )[0*nparts] );
+    double *const __restrict__ extBy = &( ( smpi->dynamics_external_Bpart[ithread] )[1*nparts] );
+    double *const __restrict__ extBz = &( ( smpi->dynamics_external_Bpart[ithread] )[2*nparts] );
+
     double *const __restrict__ gamma    = &( smpi->dynamics_invgf[ithread][0] );
     double *const __restrict__ deltaold = &( smpi->dynamics_deltaold[ithread][0] );
     int    *const __restrict__ iold     = &( smpi->dynamics_iold[ithread][0] );
@@ -2251,6 +2259,7 @@ void Species::compress(SmileiMPI *smpi, int ithread, bool compute_cell_keys) {
     #pragma acc parallel \
     present(Ex[0:nparts],Ey[0:nparts],Ez[0:nparts], \
     Bx[0:nparts], By[0:nparts], Bz[0:nparts], \
+    extBx[0:nparts], extBy[0:nparts], extBz[0:nparts], \
     deltaold[0:3*nparts], \
     iold[0:3*nparts], \
     gamma[0:nparts]) \
@@ -2332,6 +2341,12 @@ void Species::compress(SmileiMPI *smpi, int ithread, bool compute_cell_keys) {
                 }
 
                 for( unsigned int ipart = 0 ; ipart < copy_particle_number ; ipart ++ ) {
+                    extBx[copy_first_index + ipart] = extBx[particles->last_index[ibin] + ipart];
+                    extBy[copy_first_index + ipart] = extBy[particles->last_index[ibin] + ipart];
+                    extBz[copy_first_index + ipart] = extBz[particles->last_index[ibin] + ipart];
+                }
+
+                for( unsigned int ipart = 0 ; ipart < copy_particle_number ; ipart ++ ) {
                     gamma[copy_first_index + ipart] = gamma[particles->last_index[ibin] + ipart];
                 }
 
@@ -2406,6 +2421,7 @@ void Species::removeTaggedParticlesPerBin(
     // Buffers for particles
     double *const __restrict__ Epart     = smpi->dynamics_Epart[ithread].data();
     double *const __restrict__ Bpart     = smpi->dynamics_Bpart[ithread].data();
+    double *const __restrict__ extBpart  = smpi->dynamics_external_Bpart[ithread].data();
     double *const __restrict__ gamma     = smpi->dynamics_invgf[ithread].data();
     int *const __restrict__ iold         = smpi->dynamics_iold[ithread].data();
     double *const __restrict__ deltaold  = smpi->dynamics_deltaold[ithread].data();
@@ -2441,6 +2457,7 @@ void Species::removeTaggedParticlesPerBin(
     #pragma acc parallel  \
     present(Epart[0:nparts*3],\
     Bpart[0:nparts*3], \
+    extBpart[0:nparts*3], \
     gamma[0:nparts], \
     iold[0:nparts*nDim_particle], \
     deltaold[0:nparts*nDim_particle]) \
@@ -2506,6 +2523,7 @@ void Species::removeTaggedParticlesPerBin(
                         for ( int iDim=2 ; iDim>=0 ; iDim-- ) {
                             Epart[iDim*nparts+ipart] = Epart[iDim*nparts+last_photon_index];
                             Bpart[iDim*nparts+ipart] = Bpart[iDim*nparts+last_photon_index];
+                            extBpart[iDim*nparts+ipart] = extBpart[iDim*nparts+last_photon_index];
                         }
                         for ( int iDim=nDim_particle-1 ; iDim>=0 ; iDim-- ) {
                             iold[iDim*nparts+ipart] = iold[iDim*nparts+last_photon_index];
@@ -2562,6 +2580,7 @@ void Species::removeTaggedParticles(
     // Buffers for particles
     double *const __restrict__ Epart     = smpi->dynamics_Epart[ithread].data();
     double *const __restrict__ Bpart     = smpi->dynamics_Bpart[ithread].data();
+    double *const __restrict__ extBpart  = smpi->dynamics_external_Bpart[ithread].data();
     double *const __restrict__ gamma     = smpi->dynamics_invgf[ithread].data();
     int    *const __restrict__ iold      = smpi->dynamics_iold[ithread].data();
     double *const __restrict__ deltaold  = smpi->dynamics_deltaold[ithread].data();
@@ -2598,6 +2617,7 @@ void Species::removeTaggedParticles(
     #pragma acc serial  \
     present(Epart[0:nparts*3],\
     Bpart[0:nparts*3], \
+    extBpart[0:nparts*3], \
     gamma[0:nparts], \
     iold[0:nparts*nDim_particle], \
     deltaold[0:nparts*nDim_particle], \
@@ -2655,6 +2675,7 @@ void Species::removeTaggedParticles(
                     for ( int iDim=2 ; iDim>=0 ; iDim-- ) {
                         Epart[iDim*nparts+ipart] = Epart[iDim*nparts+last_moving_index];
                         Bpart[iDim*nparts+ipart] = Bpart[iDim*nparts+last_moving_index];
+                        extBpart[iDim*nparts+ipart] = extBpart[iDim*nparts+last_moving_index];
                     }
                     for ( int iDim=nDim_particle-1 ; iDim>=0 ; iDim-- ) {
                         iold[iDim*nparts+ipart] = iold[iDim*nparts+last_moving_index];
@@ -2685,6 +2706,7 @@ void Species::removeTaggedParticles(
             for ( int idim=1 ; idim<2 ; idim++ ) {
                 Epart[idim*new_n_parts+ip] = Epart[idim*nparts+nparts-1-ip];
                 Bpart[idim*new_n_parts+ip] = Bpart[idim*nparts+nparts-1-ip];
+                extBpart[idim*new_n_parts+ip] = extBpart[idim*nparts+nparts-1-ip];
             }
             for ( int idim=1; idim < nDim_particle; idim++ ) {
                 iold[idim*new_n_parts+ip] = iold[idim*nparts+nparts-1-ip];
@@ -2803,6 +2825,8 @@ void Species::ponderomotiveUpdateSusceptibilityAndMomentum( double time_dual,
             smpi->traceEventIfDiagTracing(diag_PartEventTracing, Tools::getOMPThreadNum(),0,0);
             Interp->fieldsAndEnvelope( EMfields, *particles, smpi, &( particles->first_index[ibin] ), &( particles->last_index[ibin] ), ithread );
             smpi->traceEventIfDiagTracing(diag_PartEventTracing, Tools::getOMPThreadNum(),1,0);
+
+            Interp->externalMagneticField(EMfields, *particles, smpi, ibin, ithread, nDim_particle);
 
 #ifdef  __DETAILED_TIMERS
             patch->patch_timers_[7] += MPI_Wtime() - timer;
@@ -3006,6 +3030,8 @@ void Species::ponderomotiveUpdateSusceptibilityAndMomentumTasks( double time_dua
                 ithread = Tools::getOMPThreadNum();
                 timer = MPI_Wtime();
 #endif
+
+                Interp->externalMagneticField(EMfields, *particles, smpi, ibin, ithread, nDim_particle);
 
                 smpi->traceEventIfDiagTracing(diag_PartEventTracing, Tools::getOMPThreadNum(),0,1);
                 // Push only the particle momenta

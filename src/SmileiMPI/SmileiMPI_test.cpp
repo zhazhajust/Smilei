@@ -114,6 +114,7 @@ void SmileiMPI_test::init( Params &params, DomainDecomposition *domain_decomposi
     // Initialize buffers for particles push vectorization
     dynamics_Epart.resize( 1 );
     dynamics_Bpart.resize( 1 );
+    dynamics_external_Bpart.resize( 1 );
     dynamics_invgf.resize( 1 );
     dynamics_iold.resize( 1 );
     dynamics_deltaold.resize( 1 );

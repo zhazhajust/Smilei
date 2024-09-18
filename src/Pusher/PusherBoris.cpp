@@ -43,6 +43,10 @@ void PusherBoris::operator()( Particles &particles, SmileiMPI *smpi, int istart,
     const double *const __restrict__ By = &( ( smpi->dynamics_Bpart[ithread] )[1*nparts] );
     const double *const __restrict__ Bz = &( ( smpi->dynamics_Bpart[ithread] )[2*nparts] );
 
+    const double *const __restrict__ extBx = &( ( smpi->dynamics_external_Bpart[ithread] )[0*nparts] );
+    const double *const __restrict__ extBy = &( ( smpi->dynamics_external_Bpart[ithread] )[1*nparts] );
+    const double *const __restrict__ extBz = &( ( smpi->dynamics_external_Bpart[ithread] )[2*nparts] );
+
 #if defined( SMILEI_ACCELERATOR_GPU_OMP )
     const int istart_offset   = istart - ipart_buffer_offset;
     const int particle_number = iend - istart;
@@ -95,11 +99,13 @@ void PusherBoris::operator()( Particles &particles, SmileiMPI *smpi, int istart,
         const double umy = momentum_y[ipart] + pysm;
         const double umz = momentum_z[ipart] + pzsm;
 
+        // const double external_By = 0.05;
+
         // Rotation in the magnetic field
         double local_invgf     = charge_over_mass_dts2 / std::sqrt( 1.0 + umx*umx + umy*umy + umz*umz );
-        const double Tx        = local_invgf * ( Bx[ipart2] );
-        const double Ty        = local_invgf * ( By[ipart2] );
-        const double Tz        = local_invgf * ( Bz[ipart2] );
+        const double Tx        = local_invgf * ( Bx[ipart2] + extBx[ipart2] );
+        const double Ty        = local_invgf * ( By[ipart2] + extBy[ipart2] );
+        const double Tz        = local_invgf * ( Bz[ipart2] + extBz[ipart2] );
         const double inv_det_T = 1.0/( 1.0+Tx*Tx+Ty*Ty+Tz*Tz );
 
         pxsm += ( ( 1.0+Tx*Tx-Ty*Ty-Tz*Tz )* umx  +      2.0*( Tx*Ty+Tz )* umy  +      2.0*( Tz*Tx-Ty )* umz )*inv_det_T;

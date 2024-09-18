@@ -43,6 +43,18 @@ struct ExtField {
 };
 
 // ---------------------------------------------------------------------------------------------------------------------
+//! This structure contains the properties of each ExtField
+// ---------------------------------------------------------------------------------------------------------------------
+struct PartExtField {
+    //! field to which apply the external field
+    std::string field;
+
+    Profile *profile;
+
+    unsigned int index;
+};
+
+// ---------------------------------------------------------------------------------------------------------------------
 //! This structure contains the properties of each PrescribedField
 // ---------------------------------------------------------------------------------------------------------------------
 struct PrescribedField {
@@ -446,6 +458,9 @@ public:
 
     //! external fields parameters the key string is the name of the field and the value is a vector of ExtField
     std::vector<ExtField> extFields;
+
+    //! external fields parameters the key string is the name of the field and the value is a vector of ExtField
+    std::vector<PartExtField> partExtFields;
 
     //! external time fields parameters the key string is the name of the field and the value is a vector of ExtField
     std::vector<PrescribedField> prescribedFields;

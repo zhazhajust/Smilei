@@ -44,6 +44,8 @@ public:
         ERROR( "Envelope not implemented with this geometry and this order" );
     };
     
+    void externalMagneticField( ElectroMagn *EMfields, Particles &particles, SmileiMPI *smpi, int ibin, int ithread, int nDim_particle );
+
 private:
 
 };//END class

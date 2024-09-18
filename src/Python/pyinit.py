@@ -593,6 +593,12 @@ class ExternalField(SmileiComponent):
     field = None
     profile = None
 
+# external particle fields
+class PartExternalField(SmileiComponent):
+    """External Field"""
+    field = None
+    profile = None
+
 # external time fields
 class PrescribedField(SmileiComponent):
     """External Time Field"""

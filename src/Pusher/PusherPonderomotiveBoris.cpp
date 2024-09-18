@@ -27,7 +27,8 @@ void PusherPonderomotiveBoris::operator()( Particles &particles, SmileiMPI *smpi
     std::vector<double> *Bpart       = &( smpi->dynamics_Bpart[ithread] );
     std::vector<double> *GradPhipart = &( smpi->dynamics_GradPHIpart[ithread] );
     double *dynamics_inv_gamma_ponderomotive = &( smpi->dynamics_inv_gamma_ponderomotive[ithread][0] );
-    
+    std::vector<double> *extBpart       = &( smpi->dynamics_external_Bpart[ithread] );
+
     double charge_over_mass_dts2, charge_sq_over_mass_sq_dts4;
     double umx, umy, umz, upx, upy, upz;
     double alpha, inv_det_T, Tx, Ty, Tz, Tx2, Ty2, Tz2;
@@ -54,7 +55,11 @@ void PusherPonderomotiveBoris::operator()( Particles &particles, SmileiMPI *smpi
     const double *const __restrict__ GradPhiy = &( ( *GradPhipart )[1*nparts] );
     const double *const __restrict__ GradPhiz = &( ( *GradPhipart )[2*nparts] );
     //double *inv_gamma_ponderomotive = &( ( *dynamics_inv_gamma_ponderomotive )[0*nparts] );
-    
+
+    const double *const __restrict__ extBx = &( ( *extBpart )[0*nparts] );
+    const double *const __restrict__ extBy = &( ( *extBpart )[1*nparts] );
+    const double *const __restrict__ extBz = &( ( *extBpart )[2*nparts] );
+
     #ifndef SMILEI_ACCELERATOR_GPU_OACC
         #pragma omp simd
     #else
@@ -82,11 +87,16 @@ void PusherPonderomotiveBoris::operator()( Particles &particles, SmileiMPI *smpi
         umy = momentum_y[ipart] + pysm;
         umz = momentum_z[ipart] + pzsm;
         
+        // const double external_By = 0.05;
+
         // Rotation in the magnetic field, using updated gamma ponderomotive
         alpha = charge_over_mass_dts2 * dynamics_inv_gamma_ponderomotive[ipart-ipart_buffer_offset];
-        Tx    = alpha * ( Bx[ipart-ipart_buffer_offset] );
-        Ty    = alpha * ( By[ipart-ipart_buffer_offset] );
-        Tz    = alpha * ( Bz[ipart-ipart_buffer_offset] );
+        Tx    = alpha * ( Bx[ipart-ipart_buffer_offset] + extBx[ipart-ipart_buffer_offset] );
+        Ty    = alpha * ( By[ipart-ipart_buffer_offset] + extBy[ipart-ipart_buffer_offset] );
+        Tz    = alpha * ( Bz[ipart-ipart_buffer_offset] + extBz[ipart-ipart_buffer_offset] );
+        // Tx    = alpha * ( Bx[ipart-ipart_buffer_offset] );
+        // Ty    = alpha * ( By[ipart-ipart_buffer_offset] );
+        // Tz    = alpha * ( Bz[ipart-ipart_buffer_offset] );
         Tx2   = Tx*Tx;
         Ty2   = Ty*Ty;
         Tz2   = Tz*Tz;

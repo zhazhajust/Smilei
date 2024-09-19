@@ -24,6 +24,8 @@ public:
     virtual void fieldsSelection( ElectroMagn *EMfields, Particles &particles, double *buffer, int offset, std::vector<unsigned int> *selection ) override = 0;
 
     virtual void oneField( Field **field, Particles &particles, int *istart, int *iend, double *FieldLoc, double *l1=NULL, double *l2=NULL, double *l3=NULL ) override = 0;
+    
+    void externalMagneticField( ElectroMagn *EMfields, Particles &particles, SmileiMPI *smpi, int ibin, int ithread ) override final;
 
 protected:
 

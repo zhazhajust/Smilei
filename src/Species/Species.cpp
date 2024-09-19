@@ -742,7 +742,7 @@ void Species::dynamics( double time_dual,
             smpi->traceEventIfDiagTracing(diag_PartEventTracing, Tools::getOMPThreadNum(),1,0);
             patch->stopFineTimer(interpolation_timer_id_);
 
-            Interp->externalMagneticField(EMfields, *particles, smpi, ibin, ithread, nDim_particle);
+            Interp->externalMagneticField(EMfields, *particles, smpi, ibin, ithread);
 
             // Ionization
             if( Ionize ) {
@@ -1285,7 +1285,7 @@ void Species::dynamicsTasks( double time_dual, unsigned int ispec,
                     vector<vector<double>> pold;
                     particles->prepareInterpolatedFields( pold, start, n );
                     
-                    Interp->externalMagneticField(EMfields, *particles, smpi, ibin, ithread, nDim_particle);
+                    Interp->externalMagneticField(EMfields, *particles, smpi, ibin, ithread);
 
                     // Push the particles and the photons
                     ( *Push )( *particles, smpi, start, stop, buffer_id );
@@ -2826,7 +2826,7 @@ void Species::ponderomotiveUpdateSusceptibilityAndMomentum( double time_dual,
             Interp->fieldsAndEnvelope( EMfields, *particles, smpi, &( particles->first_index[ibin] ), &( particles->last_index[ibin] ), ithread );
             smpi->traceEventIfDiagTracing(diag_PartEventTracing, Tools::getOMPThreadNum(),1,0);
 
-            Interp->externalMagneticField(EMfields, *particles, smpi, ibin, ithread, nDim_particle);
+            Interp->externalMagneticField(EMfields, *particles, smpi, ibin, ithread);
 
 #ifdef  __DETAILED_TIMERS
             patch->patch_timers_[7] += MPI_Wtime() - timer;
@@ -3031,7 +3031,7 @@ void Species::ponderomotiveUpdateSusceptibilityAndMomentumTasks( double time_dua
                 timer = MPI_Wtime();
 #endif
 
-                Interp->externalMagneticField(EMfields, *particles, smpi, ibin, ithread, nDim_particle);
+                Interp->externalMagneticField(EMfields, *particles, smpi, ibin, ithread);
 
                 smpi->traceEventIfDiagTracing(diag_PartEventTracing, Tools::getOMPThreadNum(),0,1);
                 // Push only the particle momenta

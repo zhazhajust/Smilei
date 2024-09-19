@@ -117,22 +117,32 @@ public:
             if( !PyTools::extract_pyProfile( "profile", profile, "PartExternalField", n_extfield ) ) {
                 ERROR( "PartExternalField #"<<n_extfield<<": parameter 'profile' not understood" );
             }
-            extField.profile = new Profile( profile, params.nDim_field, name.str(), params, true, true );
+            extField.profile = new Profile( profile, params.nDim_particle, name.str(), params, true, true );
             // Find which index the field is in the allFields vector
             extField.index = 1000;
-            for( unsigned int ifield=0; ifield<EMfields->allFields.size(); ifield++ ) {
-                if( EMfields->allFields[ifield]
-                    && extField.field==EMfields->allFields[ifield]->name ) {
-                    extField.index = ifield;
-                    break;
-                }
-            }
-            if( extField.index > EMfields->allFields.size()-1 ) {
-                ERROR( "ExternalField #"<<n_extfield<<": field "<<extField.field<<" not found" );
+            // for( unsigned int ifield=0; ifield<EMfields->allFields.size(); ifield++ ) {
+            //     if( EMfields->allFields[ifield]
+            //         && extField.field==EMfields->allFields[ifield]->name ) {
+            //         extField.index = ifield;
+            //         break;
+            //     }
+            // }
+            if(LowerCase( extField.field ) == "bx"){
+                extField.index = 0 + 3;
+            } else if(LowerCase( extField.field ) == "by"){
+                extField.index = 1 + 3;
+            } else if(LowerCase( extField.field ) == "bz"){
+                extField.index = 2 + 3;
+            } else {
+                ERROR( "PartExternalField #"<<n_extfield<<": field "<<extField.field<<" not found" );
             }
 
+            // if( extField.index > EMfields->allFields.size()-1 ) {
+            //     ERROR( "ExternalField #"<<n_extfield<<": field "<<extField.field<<" not found" );
+            // }
+
             if( first_creation ) {
-                MESSAGE( 1, "External field " << extField.field << ": " << extField.profile->getInfo() );
+                MESSAGE( 1, "PartExternalField field " << extField.field << ": " << extField.profile->getInfo() );
             }
             EMfields->partExtFields.push_back( extField );
         }

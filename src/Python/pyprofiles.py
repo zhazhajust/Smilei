@@ -596,6 +596,44 @@ def LaserEnvelopeGaussian2D( a0=1., omega=1., focus=None, waist=3., time_envelop
         polarization_phi    = polarization_phi,
         ellipticity         = ellipticity
     )
+    
+def LaserEnvelopeAstrl2D( a0=1., omega=1., focus=None, delay=None, waist=3., time_envelope=tconstant(),
+        envelope_solver = "explicit",Envelope_boundary_conditions = [["reflective"]],
+        polarization_phi = 0.,ellipticity = 0.):
+    import cmath
+    from numpy import exp, sqrt, arctan, vectorize
+    # assert len(focus)==2, "LaserEnvelopeGaussian2D: focus must be a list of length 2."
+    assert type(focus) is np.ndarray, "LaserEnvelopeAstrl2D: focus must be a numpy array."
+    if delay is None:
+        delay = np.zeros(len(focus))
+
+    def gaussian_beam_with_temporal_profile(x, y, t):
+        def _gaussian_beam_with_temporal_profile(idx):
+            polarization_amplitude_factor = 1/sqrt(1.+ellipticity**2)
+            Zr = omega * waist**2/2.
+            w  = sqrt(1./(1.+   ( (x-focus[idx][0])/Zr  )**2 ) )
+            coeff = omega * (x-focus[idx][0]) * w**2 / (2.*Zr**2)
+            phase = coeff * ( (y-focus[idx][1])**2 )
+            exponential_with_total_phase = exp(1j*(phase-arctan( (x-focus[idx][0])/Zr )))
+            invWaist2 = (w/waist)**2
+            spatial_amplitude = a0 *polarization_amplitude_factor * sqrt(w) * exp( -invWaist2*(y-focus[idx][1])**2)
+            space_time_envelope = spatial_amplitude * vectorize(time_envelope)(t - delay[idx])
+            return space_time_envelope * exponential_with_total_phase
+        
+        res = 0.0
+        for idx in range(len(focus)):
+            res += _gaussian_beam_with_temporal_profile(idx)
+        return res
+
+    # Create Laser Envelope
+    LaserEnvelope(
+        omega               = omega,
+        envelope_profile    = gaussian_beam_with_temporal_profile,
+        envelope_solver     = envelope_solver,
+        Envelope_boundary_conditions = Envelope_boundary_conditions,
+        polarization_phi    = polarization_phi,
+        ellipticity         = ellipticity
+    )
 
 def LaserGaussian3D( box_side="xmin", a0=1., omega=1., focus=None, waist=3., incidence_angle=[0.,0.],
         polarization_phi=0., ellipticity=0., time_envelope=tconstant(), phase_offset=0.):
@@ -754,6 +792,55 @@ def LaserEnvelopeGaussianAM( a0=1., omega=1., focus=None, waist=3., time_envelop
         space_time_envelope = spatial_amplitude * vectorize(time_envelope)(t)
         return space_time_envelope * exponential_with_total_phase
 
+    # Create Laser Envelope
+    LaserEnvelope(
+        omega               = omega,
+        envelope_profile    = gaussian_beam_with_temporal_profile,
+        envelope_solver     = envelope_solver,
+        Envelope_boundary_conditions = Envelope_boundary_conditions,
+        Env_pml_sigma_parameters = Env_pml_sigma_parameters,
+        Env_pml_kappa_parameters = Env_pml_kappa_parameters,
+        Env_pml_alpha_parameters = Env_pml_alpha_parameters,
+        polarization_phi    = polarization_phi,
+        ellipticity         = ellipticity
+    )
+
+def LaserEnvelopeAstrlAM( a0=1., omega=1., focus=None, delay=None, waist=3., time_envelope=tconstant(),
+        envelope_solver = "explicit",Envelope_boundary_conditions = [["reflective"]],
+        Env_pml_sigma_parameters = [[0.90,2],[10.0,2],[10.0,2]],
+        Env_pml_kappa_parameters = [[1.00,1.00,2],[1.00,1.00,2],[1.00,1.00,2]],
+        Env_pml_alpha_parameters = [[0.90,0.90,1],[0.75,0.75,1],[0.75,0.75,1]],
+        polarization_phi = 0.,ellipticity = 0.):
+    import cmath
+    from numpy import exp, sqrt, arctan, vectorize
+    # if (len(focus)<1) or (len(focus)>2): 
+    #     print("ERROR: focus should be a list of length 1")
+    #     exit(1)
+    # elif (len(focus)==2):
+    #     print("WARNING: deprecated focus in LaserEnvelopeGaussianAM should be a list of length 1")
+
+    assert type(focus) is np.ndarray, "focus must be a numpy array"
+    assert type(delay) is np.ndarray, "delay must be a numpy array"
+    assert len(focus) == len(delay), "focus and delay must have the same length"
+
+    def gaussian_beam_with_temporal_profile(x, r, t):
+        def _gaussian_beam_with_temporal_profile(idx):
+            polarization_amplitude_factor = 1/sqrt(1.+ellipticity**2)
+            Zr = omega * waist**2/2.
+            w  = sqrt(1./(1.+   ( (x-focus[idx][0])/Zr  )**2 ) )
+            coeff = omega * (x-focus[idx][0]) * w**2 / (2.*Zr**2)
+            phase = coeff * ( r**2 )
+            exponential_with_total_phase = exp(1j*(phase-arctan( (x-focus[0])/Zr )))
+            invWaist2 = (w/waist)**2
+            spatial_amplitude = a0 * polarization_amplitude_factor * w * exp( -invWaist2*(  r**2  ) )
+            space_time_envelope = spatial_amplitude * vectorize(time_envelope)(t - delay[idx])
+            return space_time_envelope * exponential_with_total_phase
+        
+        res = 0.0
+        for idx in range(len(focus)):
+            res += _gaussian_beam_with_temporal_profile(idx)
+        return res
+    
     # Create Laser Envelope
     LaserEnvelope(
         omega               = omega,
